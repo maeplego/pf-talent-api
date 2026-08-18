@@ -1,0 +1,13 @@
+services:
+  talent-api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      TALENT_HTTP_PORT: "8090"
+      # P05 internal API（イベントタイプ自動プロビジョン）に使う
+      CALENDAR_INTERNAL_TOKEN: ${CALENDAR_INTERNAL_TOKEN:-}
+      CALENDAR_API_URL: ${CALENDAR_API_URL:-http://localhost:8095}
+    ports:
+      - "8090:8090"
+

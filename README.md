@@ -12,6 +12,16 @@ npm run start
 
 - `http://localhost:8090/health`
 
+## 起動（Compose）
+
+```powershell
+cd deploy
+copy .env.example .env
+docker compose up -d --build
+```
+
+- `http://localhost:8090/health`
+
 ## テスト
 
 ```powershell
