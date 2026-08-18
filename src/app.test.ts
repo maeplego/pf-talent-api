@@ -1,19 +1,118 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
+import { canTransition } from "./domain.js";
 import { MemoryStore } from "./memory.js";
 
-describe("talent-api minimal flow", () => {
+function jobPayload(overrides: Record<string, unknown> = {}) {
+  return {
+    employerSub: "employer-1",
+    title: "Backend Engineer",
+    status: "published",
+    ...overrides,
+  };
+}
+
+describe("canTransition", () => {
+  it.each([
+    ["applied", "document_passed", true],
+    ["applied", "rejected", true],
+    ["applied", "interview", false],
+    ["document_passed", "interview", true],
+    ["document_passed", "rejected", true],
+    ["document_passed", "applied", false],
+    ["interview", "offered", true],
+    ["interview", "rejected", true],
+    ["interview", "applied", false],
+    ["offered", "rejected", false],
+    ["rejected", "applied", false],
+  ] as const)("%s → %s = %s", (from, to, expected) => {
+    expect(canTransition(from, to)).toBe(expected);
+  });
+});
+
+describe("talent-api", () => {
+  it("creates job with extended fields", async () => {
+    const app = createApp(new MemoryStore());
+    const res = await app.request("/v1/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jobPayload({ skills: ["Go", "PostgreSQL"], salaryMin: 5000000, salaryMax: 8000000, remote: true })),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { skills: string[]; remote: boolean };
+    expect(body.skills).toEqual(["Go", "PostgreSQL"]);
+    expect(body.remote).toBe(true);
+  });
+
+  it("lists jobs", async () => {
+    const app = createApp(new MemoryStore());
+    await app.request("/v1/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(jobPayload()) });
+    const res = await app.request("/v1/jobs");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as unknown[];
+    expect(body.length).toBe(1);
+  });
+
+  it("rejects invalid state transition (applied → interview)", async () => {
+    const app = createApp(new MemoryStore());
+    const job = await app.request("/v1/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(jobPayload()) });
+    const jobBody = (await job.json()) as { id: string };
+    const appRes = await app.request(`/v1/jobs/${jobBody.id}/applications`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidateSub: "c1", resumeSnapshot: "resume" }),
+    });
+    const appBody = (await appRes.json()) as { id: string };
+    const patch = await app.request(`/v1/applications/${appBody.id}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "interview" }),
+    });
+    expect(patch.status).toBe(409);
+  });
+
+  it("allows valid state transition (applied → document_passed)", async () => {
+    const app = createApp(new MemoryStore());
+    const job = await app.request("/v1/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(jobPayload()) });
+    const jobBody = (await job.json()) as { id: string };
+    const appRes = await app.request(`/v1/jobs/${jobBody.id}/applications`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidateSub: "c1", resumeSnapshot: "resume" }),
+    });
+    const appBody = (await appRes.json()) as { id: string };
+    const patch = await app.request(`/v1/applications/${appBody.id}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "document_passed" }),
+    });
+    expect(patch.status).toBe(200);
+  });
+
+  it("upserts and retrieves candidate profile", async () => {
+    const app = createApp(new MemoryStore());
+    const profile = { sub: "candidate-1", displayName: "Alice", skills: ["TypeScript"], desiredEmploymentTypes: ["full_time"], desiredMinSalary: 4000000, desiredRemote: true, bio: "Hi" };
+    const put = await app.request("/v1/profiles/candidate-1", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profile) });
+    expect(put.status).toBe(200);
+    const get = await app.request("/v1/profiles/candidate-1");
+    expect(get.status).toBe(200);
+    const body = (await get.json()) as { displayName: string };
+    expect(body.displayName).toBe("Alice");
+  });
+
+  it("returns 404 for unknown profile", async () => {
+    const app = createApp(new MemoryStore());
+    const res = await app.request("/v1/profiles/unknown");
+    expect(res.status).toBe(404);
+  });
+
   it("updates application status to interview from calendar webhook", async () => {
     const app = createApp(new MemoryStore());
 
     const job = await app.request("/v1/jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        employerSub: "employer-1",
-        title: "Backend Engineer",
-        status: "published",
-      }),
+      body: JSON.stringify(jobPayload()),
     });
     expect(job.status).toBe(201);
     const jobBody = (await job.json()) as { id: string };

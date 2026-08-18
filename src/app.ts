@@ -1,12 +1,21 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import type { BookingConfirmedEvent } from "./domain.js";
+import { canTransition, type BookingConfirmedEvent } from "./domain.js";
 import type { Store } from "./store.js";
+
+const employmentTypeEnum = z.enum(["full_time", "contract", "part_time", "internship"]);
 
 const jobCreateSchema = z.object({
   employerSub: z.string().min(1),
   title: z.string().min(1).max(160),
   status: z.enum(["draft", "published"]).default("draft"),
+  employmentType: employmentTypeEnum.default("full_time"),
+  location: z.string().max(120).default(""),
+  remote: z.boolean().default(false),
+  salaryMin: z.number().int().nonnegative().nullable().default(null),
+  salaryMax: z.number().int().nonnegative().nullable().default(null),
+  skills: z.array(z.string().min(1)).default([]),
+  description: z.string().max(50000).default(""),
 });
 
 const appCreateSchema = z.object({
@@ -15,7 +24,17 @@ const appCreateSchema = z.object({
 });
 
 const appStatusSchema = z.object({
-  status: z.enum(["applied", "document_passed", "interview", "rejected"]),
+  status: z.enum(["applied", "document_passed", "interview", "offered", "rejected"]),
+});
+
+const profileSchema = z.object({
+  sub: z.string().min(1),
+  displayName: z.string().min(1).max(120),
+  skills: z.array(z.string().min(1)).default([]),
+  desiredEmploymentTypes: z.array(employmentTypeEnum).default([]),
+  desiredMinSalary: z.number().int().nonnegative().nullable().default(null),
+  desiredRemote: z.boolean().default(false),
+  bio: z.string().max(5000).default(""),
 });
 
 const calendarLinkSchema = z.object({
@@ -50,6 +69,11 @@ export function createApp(store: Store): Hono {
   const app = new Hono();
 
   app.get("/health", (c) => c.json({ ok: true }));
+
+  app.get("/v1/jobs", async (c) => {
+    const rows = await store.listJobs();
+    return c.json(rows);
+  });
 
   app.post("/v1/jobs", async (c) => {
     const parsed = jobCreateSchema.safeParse(await c.req.json());
@@ -127,11 +151,18 @@ export function createApp(store: Store): Hono {
     if (!parsed.success) {
       return c.json({ error: { code: "invalid_request", message: parsed.error.message } }, 400);
     }
-    const row = await store.updateApplicationStatus(c.req.param("id"), parsed.data.status);
-    if (!row) {
+    const current = await store.findApplicationById(c.req.param("id"));
+    if (!current) {
       return c.json({ error: { code: "not_found", message: "not found" } }, 404);
     }
-    return c.json(row);
+    if (!canTransition(current.status, parsed.data.status)) {
+      return c.json(
+        { error: { code: "invalid_transition", message: `cannot transition from ${current.status} to ${parsed.data.status}` } },
+        409,
+      );
+    }
+    const row = await store.updateApplicationStatus(c.req.param("id"), parsed.data.status);
+    return c.json(row!);
   });
 
   // P05 internal APIで作る event_type.externalRef を application と結びつける。
@@ -141,6 +172,26 @@ export function createApp(store: Store): Hono {
       return c.json({ error: { code: "invalid_request", message: parsed.error.message } }, 400);
     }
     const row = await store.attachCalendarExternalRef(c.req.param("id"), parsed.data.externalRef);
+    if (!row) {
+      return c.json({ error: { code: "not_found", message: "not found" } }, 404);
+    }
+    return c.json(row);
+  });
+
+  app.put("/v1/profiles/:sub", async (c) => {
+    const parsed = profileSchema.safeParse(await c.req.json());
+    if (!parsed.success) {
+      return c.json({ error: { code: "invalid_request", message: parsed.error.message } }, 400);
+    }
+    if (parsed.data.sub !== c.req.param("sub")) {
+      return c.json({ error: { code: "invalid_request", message: "sub mismatch" } }, 400);
+    }
+    const row = await store.upsertProfile(parsed.data);
+    return c.json(row);
+  });
+
+  app.get("/v1/profiles/:sub", async (c) => {
+    const row = await store.findProfileBySub(c.req.param("sub"));
     if (!row) {
       return c.json({ error: { code: "not_found", message: "not found" } }, 404);
     }

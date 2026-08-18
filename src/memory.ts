@@ -1,10 +1,11 @@
 import { ulid } from "ulidx";
-import type { Application, ApplicationStatus, BookingConfirmedEvent, Job } from "./domain.js";
+import type { Application, ApplicationStatus, BookingConfirmedEvent, CandidateProfile, Job } from "./domain.js";
 import type { Store } from "./store.js";
 
 export class MemoryStore implements Store {
   private jobs = new Map<string, Job>();
   private applications = new Map<string, Application>();
+  private profiles = new Map<string, CandidateProfile>();
 
   async createJob(input: Omit<Job, "id">): Promise<Job> {
     const row: Job = { id: ulid(), ...input };
@@ -14,6 +15,10 @@ export class MemoryStore implements Store {
 
   async findJobById(id: string): Promise<Job | null> {
     return this.jobs.get(id) ?? null;
+  }
+
+  async listJobs(): Promise<Job[]> {
+    return [...this.jobs.values()];
   }
 
   async createApplication(input: Omit<Application, "id" | "status">): Promise<Application> {
@@ -72,6 +77,15 @@ export class MemoryStore implements Store {
     app.interviewBookingId = event.data.bookingId;
     this.applications.set(app.id, app);
     return app;
+  }
+
+  async upsertProfile(profile: CandidateProfile): Promise<CandidateProfile> {
+    this.profiles.set(profile.sub, profile);
+    return profile;
+  }
+
+  async findProfileBySub(sub: string): Promise<CandidateProfile | null> {
+    return this.profiles.get(sub) ?? null;
   }
 }
 

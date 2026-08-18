@@ -1,11 +1,32 @@
+export type EmploymentType = "full_time" | "contract" | "part_time" | "internship";
+
 export type Job = {
   id: string;
   employerSub: string;
   title: string;
   status: "draft" | "published";
+  employmentType: EmploymentType;
+  location: string;
+  remote: boolean;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  skills: string[];
+  description: string;
 };
 
-export type ApplicationStatus = "applied" | "document_passed" | "interview" | "rejected";
+export type ApplicationStatus = "applied" | "document_passed" | "interview" | "offered" | "rejected";
+
+const ALLOWED_TRANSITIONS: Record<ApplicationStatus, ApplicationStatus[]> = {
+  applied: ["document_passed", "rejected"],
+  document_passed: ["interview", "rejected"],
+  interview: ["offered", "rejected"],
+  offered: [],
+  rejected: [],
+};
+
+export function canTransition(from: ApplicationStatus, to: ApplicationStatus): boolean {
+  return ALLOWED_TRANSITIONS[from]?.includes(to) ?? false;
+}
 
 export type Application = {
   id: string;
@@ -13,9 +34,18 @@ export type Application = {
   candidateSub: string;
   resumeSnapshot: string;
   status: ApplicationStatus;
-  // P05 webhookとの結合キー。event.data.externalRef と一致させる。
   calendarExternalRef?: string;
   interviewBookingId?: string;
+};
+
+export type CandidateProfile = {
+  sub: string;
+  displayName: string;
+  skills: string[];
+  desiredEmploymentTypes: EmploymentType[];
+  desiredMinSalary: number | null;
+  desiredRemote: boolean;
+  bio: string;
 };
 
 export type BookingConfirmedEvent = {
