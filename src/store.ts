@@ -3,6 +3,7 @@ import type { Application, ApplicationStatus, BookingConfirmedEvent, Job } from 
 export type Store = {
   createJob(input: Omit<Job, "id">): Promise<Job>;
   createApplication(input: Omit<Application, "id" | "status">): Promise<Application>;
+  findJobById(id: string): Promise<Job | null>;
   updateApplicationStatus(id: string, status: ApplicationStatus): Promise<Application | null>;
   attachCalendarExternalRef(id: string, externalRef: string): Promise<Application | null>;
   findApplicationById(id: string): Promise<Application | null>;

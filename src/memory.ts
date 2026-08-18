@@ -12,6 +12,10 @@ export class MemoryStore implements Store {
     return row;
   }
 
+  async findJobById(id: string): Promise<Job | null> {
+    return this.jobs.get(id) ?? null;
+  }
+
   async createApplication(input: Omit<Application, "id" | "status">): Promise<Application> {
     const row: Application = {
       id: ulid(),

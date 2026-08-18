@@ -40,6 +40,12 @@ const bookingConfirmedSchema = z.object({
   }),
 });
 
+const weekdayRules = [1, 2, 3, 4, 5].map((dayOfWeek) => ({
+  dayOfWeek,
+  startLocal: "09:00",
+  endLocal: "12:00",
+}));
+
 export function createApp(store: Store): Hono {
   const app = new Hono();
 
@@ -52,6 +58,45 @@ export function createApp(store: Store): Hono {
     }
     const row = await store.createJob(parsed.data);
     return c.json(row, 201);
+  });
+
+  app.post("/v1/jobs/:id/provision-interview-event-type", async (c) => {
+    const token = process.env.CALENDAR_INTERNAL_TOKEN?.trim() ?? "";
+    if (!token) {
+      return c.json({ error: { code: "unavailable", message: "calendar internal token is required" } }, 503);
+    }
+    const baseUrl = (process.env.CALENDAR_API_URL?.trim() ?? "http://localhost:8095").replace(/\/$/, "");
+
+    const job = await store.findJobById(c.req.param("id"));
+    if (!job) {
+      return c.json({ error: { code: "not_found", message: "not found" } }, 404);
+    }
+
+    const slug = `interview-30m-${job.id.slice(-16)}`.toLowerCase();
+
+    const res = await fetch(`${baseUrl}/internal/v1/event-types`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        hostSub: job.employerSub,
+        slug,
+        name: "Interview 30m",
+        durationMinutes: 30,
+        bufferMinutes: 0,
+        minNoticeMinutes: 0,
+        hostTimeZone: "Asia/Tokyo",
+        rules: weekdayRules,
+        externalRef: job.id,
+      }),
+    });
+
+    const text = await res.text();
+    return c.body(text, res.status, {
+      "Content-Type": res.headers.get("content-type") ?? "application/json",
+    });
   });
 
   app.post("/v1/jobs/:id/applications", async (c) => {

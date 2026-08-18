@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
 import { MemoryStore } from "./memory.js";
 
@@ -59,6 +59,53 @@ describe("talent-api minimal flow", () => {
     const afterBody = (await after.json()) as { status: string; interviewBookingId?: string };
     expect(afterBody.status).toBe("interview");
     expect(afterBody.interviewBookingId).toBe("bk-1");
+  });
+
+  it("provisions calendar event type for a job via P05 internal API", async () => {
+    const app = createApp(new MemoryStore());
+
+    const originalToken = process.env.CALENDAR_INTERNAL_TOKEN;
+    const originalBase = process.env.CALENDAR_API_URL;
+    process.env.CALENDAR_INTERNAL_TOKEN = "test-internal-token";
+    process.env.CALENDAR_API_URL = "http://calendar-api:8095";
+
+    try {
+      const job = await app.request("/v1/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employerSub: "employer-1",
+          title: "Backend Engineer",
+          status: "published",
+        }),
+      });
+      expect(job.status).toBe(201);
+      const jobBody = (await job.json()) as { id: string };
+
+      const fetchMock = vi.fn(async (_url: string) => {
+        const init = (fetchMock as any).mock.calls[0][1];
+        const payload = JSON.parse(init.body);
+        expect(payload.externalRef).toBe(jobBody.id);
+        expect(init.headers.Authorization).toBe(`Bearer ${process.env.CALENDAR_INTERNAL_TOKEN}`);
+        return new Response(JSON.stringify({ slug: payload.slug, externalRef: payload.externalRef }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        });
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const provision = await app.request(`/v1/jobs/${jobBody.id}/provision-interview-event-type`, {
+        method: "POST",
+      });
+      expect(provision.status).toBe(201);
+      const body = (await provision.json()) as { slug: string; externalRef: string };
+      expect(body.externalRef).toBe(jobBody.id);
+
+      vi.unstubAllGlobals();
+    } finally {
+      process.env.CALENDAR_INTERNAL_TOKEN = originalToken;
+      process.env.CALENDAR_API_URL = originalBase;
+    }
   });
 });
 
