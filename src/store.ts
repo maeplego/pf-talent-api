@@ -1,4 +1,4 @@
-import type { Application, ApplicationStatus, BookingConfirmedEvent, CandidateProfile, EmploymentType, Job, SavedSearch } from "./domain.js";
+import type { Application, ApplicationStatus, BookingConfirmedEvent, CandidateProfile, EmploymentType, Job, Report, SavedSearch } from "./domain.js";
 
 export type JobSearchParams = {
   q?: string;
@@ -18,6 +18,8 @@ export type Store = {
   createSavedSearch(input: Omit<SavedSearch, "id" | "lastRunAt">): Promise<SavedSearch>;
   listSavedSearches(candidateSub: string): Promise<SavedSearch[]>;
   runSavedSearch(id: string, now: string): Promise<{ savedSearch: SavedSearch; jobs: Job[] } | null>;
+  createReport(input: Omit<Report, "id" | "createdAt" | "status">, now: string): Promise<Report>;
+  listReports(): Promise<Report[]>;
   updateApplicationStatus(id: string, status: ApplicationStatus): Promise<Application | null>;
   attachCalendarExternalRef(id: string, externalRef: string): Promise<Application | null>;
   findApplicationById(id: string): Promise<Application | null>;

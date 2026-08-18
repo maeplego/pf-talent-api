@@ -61,6 +61,15 @@ export type SavedSearch = {
   lastRunAt: string | null;
 };
 
+export type Report = {
+  id: string;
+  reporterSub: string;
+  jobId: string;
+  reason: string;
+  status: "open" | "reviewed";
+  createdAt: string;
+};
+
 export function rankSimilarJobs(target: Job, candidates: Job[], limit: number): Job[] {
   return candidates
     .filter((row) => row.id !== target.id && row.status === "published")

@@ -1,5 +1,5 @@
 import { ulid } from "ulidx";
-import type { Application, ApplicationStatus, BookingConfirmedEvent, CandidateProfile, Job, SavedSearch } from "./domain.js";
+import type { Application, ApplicationStatus, BookingConfirmedEvent, CandidateProfile, Job, Report, SavedSearch } from "./domain.js";
 import type { JobSearchParams, Store } from "./store.js";
 
 export class MemoryStore implements Store {
@@ -7,6 +7,7 @@ export class MemoryStore implements Store {
   private applications = new Map<string, Application>();
   private profiles = new Map<string, CandidateProfile>();
   private savedSearches = new Map<string, SavedSearch>();
+  private reports = new Map<string, Report>();
 
   async createJob(input: Omit<Job, "id">): Promise<Job> {
     const row: Job = { id: ulid(), ...input };
@@ -83,6 +84,21 @@ export class MemoryStore implements Store {
     savedSearch.lastRunAt = now;
     this.savedSearches.set(savedSearch.id, savedSearch);
     return { savedSearch, jobs };
+  }
+
+  async createReport(input: Omit<Report, "id" | "createdAt" | "status">, now: string): Promise<Report> {
+    const row: Report = {
+      id: ulid(),
+      createdAt: now,
+      status: "open",
+      ...input,
+    };
+    this.reports.set(row.id, row);
+    return row;
+  }
+
+  async listReports(): Promise<Report[]> {
+    return [...this.reports.values()];
   }
 
   async createApplication(input: Omit<Application, "id" | "status">): Promise<Application> {

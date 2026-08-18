@@ -48,6 +48,12 @@ const savedSearchSchema = z.object({
   salaryMax: z.number().int().nonnegative().optional(),
 });
 
+const reportSchema = z.object({
+  reporterSub: z.string().min(1),
+  jobId: z.string().min(1),
+  reason: z.string().min(1).max(1000),
+});
+
 const slotRangeSchema = z.object({
   rangeStart: z.string().min(1),
   rangeEnd: z.string().min(1),
@@ -110,6 +116,28 @@ export function createApp(store: Store): Hono {
     return c.json(rows);
   });
 
+  app.get("/v1/jobs/facets", async (c) => {
+    const rows = await store.searchJobs({
+      q: c.req.query("q") || undefined,
+      employmentType: (c.req.query("employmentType") as any) || undefined,
+      remote: c.req.query("remote") === "true" ? true : c.req.query("remote") === "false" ? false : undefined,
+      skills: c.req.query("skills") ? c.req.query("skills")!.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
+      salaryMin: c.req.query("salaryMin") ? Number(c.req.query("salaryMin")) : undefined,
+      salaryMax: c.req.query("salaryMax") ? Number(c.req.query("salaryMax")) : undefined,
+    });
+    const employmentType: Record<string, number> = {};
+    const remote = { true: 0, false: 0 };
+    const skills: Record<string, number> = {};
+    for (const row of rows) {
+      employmentType[row.employmentType] = (employmentType[row.employmentType] ?? 0) + 1;
+      remote[String(row.remote) as "true" | "false"] += 1;
+      for (const skill of row.skills) {
+        skills[skill] = (skills[skill] ?? 0) + 1;
+      }
+    }
+    return c.json({ total: rows.length, employmentType, remote, skills });
+  });
+
   app.post("/v1/saved-searches", async (c) => {
     const parsed = savedSearchSchema.safeParse(await c.req.json());
     if (!parsed.success) {
@@ -134,6 +162,23 @@ export function createApp(store: Store): Hono {
       matchedJobs: result.jobs,
       matchedCount: result.jobs.length,
     });
+  });
+
+  app.post("/v1/reports", async (c) => {
+    const parsed = reportSchema.safeParse(await c.req.json());
+    if (!parsed.success) {
+      return c.json({ error: { code: "invalid_request", message: parsed.error.message } }, 400);
+    }
+    const job = await store.findJobById(parsed.data.jobId);
+    if (!job) {
+      return c.json({ error: { code: "not_found", message: "not found" } }, 404);
+    }
+    const row = await store.createReport(parsed.data, new Date().toISOString());
+    return c.json(row, 201);
+  });
+
+  app.get("/v1/reports", async (c) => {
+    return c.json({ reports: await store.listReports() });
   });
 
   app.post("/v1/jobs", async (c) => {

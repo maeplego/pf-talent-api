@@ -374,6 +374,66 @@ describe("talent-api", () => {
     }
   });
 
+  it("returns facet counts for published jobs", async () => {
+    const app = createApp(new MemoryStore());
+    await app.request("/v1/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jobPayload({ title: "Go Dev", employmentType: "full_time", remote: true, skills: ["Go"] })),
+    });
+    await app.request("/v1/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jobPayload({ title: "React Dev", employmentType: "contract", remote: false, skills: ["React", "Go"] })),
+    });
+    const res = await app.request("/v1/jobs/facets");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      total: number;
+      employmentType: Record<string, number>;
+      remote: Record<string, number>;
+      skills: Record<string, number>;
+    };
+    expect(body.total).toBe(2);
+    expect(body.employmentType.full_time).toBe(1);
+    expect(body.employmentType.contract).toBe(1);
+    expect(body.remote.true).toBe(1);
+    expect(body.remote.false).toBe(1);
+    expect(body.skills.Go).toBe(2);
+  });
+
+  it("creates and lists reports", async () => {
+    const app = createApp(new MemoryStore());
+    const job = await app.request("/v1/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jobPayload()),
+    });
+    const jobBody = (await job.json()) as { id: string };
+    const created = await app.request("/v1/reports", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reporterSub: "candidate-1", jobId: jobBody.id, reason: "spam" }),
+    });
+    expect(created.status).toBe(201);
+    const listed = await app.request("/v1/reports");
+    expect(listed.status).toBe(200);
+    const body = (await listed.json()) as { reports: { reason: string; status: string }[] };
+    expect(body.reports).toHaveLength(1);
+    expect(body.reports[0].reason).toBe("spam");
+    expect(body.reports[0].status).toBe("open");
+  });
+
+  it("returns 404 when reporting unknown job", async () => {
+    const app = createApp(new MemoryStore());
+    const created = await app.request("/v1/reports", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reporterSub: "candidate-1", jobId: "missing", reason: "spam" }),
+    });
+    expect(created.status).toBe(404);
+  });
+
   it("updates application status to interview from calendar webhook", async () => {
     const app = createApp(new MemoryStore());
 
