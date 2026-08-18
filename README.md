@@ -37,6 +37,10 @@ npm test
 - `GET /v1/applications/:id`
 - `POST /webhooks/calendar` (`X-Calendar-Event-Type: calendar.booking.confirmed`)
 
+## P05 ↔ P10 連携デモ
+
+P05 calendar と組み合わせた予約確定→面接ステータス更新デモの手順は `project/portfolio-plan/integration-demo.md` の「P05 ↔ P10」節を参照。
+
 ## P05 連携メモ
 
 - P05 の `event_type.externalRef` と、P10 の `application.calendarExternalRef` を同じ値にして紐付ける
