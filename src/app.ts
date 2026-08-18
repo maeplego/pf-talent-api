@@ -37,6 +37,17 @@ const profileSchema = z.object({
   bio: z.string().max(5000).default(""),
 });
 
+const savedSearchSchema = z.object({
+  candidateSub: z.string().min(1),
+  name: z.string().min(1).max(120),
+  query: z.string().max(200).default(""),
+  employmentType: employmentTypeEnum.optional(),
+  remote: z.boolean().optional(),
+  skills: z.array(z.string().min(1)).default([]),
+  salaryMin: z.number().int().nonnegative().optional(),
+  salaryMax: z.number().int().nonnegative().optional(),
+});
+
 const calendarLinkSchema = z.object({
   externalRef: z.string().min(1).max(128),
 });
@@ -92,6 +103,32 @@ export function createApp(store: Store): Hono {
       salaryMax: salaryMaxStr ? Number(salaryMaxStr) : undefined,
     });
     return c.json(rows);
+  });
+
+  app.post("/v1/saved-searches", async (c) => {
+    const parsed = savedSearchSchema.safeParse(await c.req.json());
+    if (!parsed.success) {
+      return c.json({ error: { code: "invalid_request", message: parsed.error.message } }, 400);
+    }
+    const row = await store.createSavedSearch(parsed.data);
+    return c.json(row, 201);
+  });
+
+  app.get("/v1/candidates/:sub/saved-searches", async (c) => {
+    const rows = await store.listSavedSearches(c.req.param("sub"));
+    return c.json(rows);
+  });
+
+  app.post("/v1/saved-searches/:id/run", async (c) => {
+    const result = await store.runSavedSearch(c.req.param("id"), new Date().toISOString());
+    if (!result) {
+      return c.json({ error: { code: "not_found", message: "not found" } }, 404);
+    }
+    return c.json({
+      savedSearch: result.savedSearch,
+      matchedJobs: result.jobs,
+      matchedCount: result.jobs.length,
+    });
   });
 
   app.post("/v1/jobs", async (c) => {

@@ -153,6 +153,69 @@ describe("talent-api", () => {
     expect(body.length).toBe(1);
   });
 
+  it("creates and lists saved searches", async () => {
+    const app = createApp(new MemoryStore());
+    const created = await app.request("/v1/saved-searches", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        candidateSub: "candidate-1",
+        name: "Remote Go",
+        query: "go",
+        remote: true,
+        skills: ["Go"],
+      }),
+    });
+    expect(created.status).toBe(201);
+
+    const listed = await app.request("/v1/candidates/candidate-1/saved-searches");
+    expect(listed.status).toBe(200);
+    const body = (await listed.json()) as { name: string }[];
+    expect(body).toHaveLength(1);
+    expect(body[0].name).toBe("Remote Go");
+  });
+
+  it("runs saved search and returns matching published jobs", async () => {
+    const app = createApp(new MemoryStore());
+    await app.request("/v1/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jobPayload({ title: "Go Remote", remote: true, skills: ["Go"], description: "remote go role" })),
+    });
+    await app.request("/v1/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jobPayload({ title: "Office React", remote: false, skills: ["React"], description: "frontend" })),
+    });
+    const saved = await app.request("/v1/saved-searches", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        candidateSub: "candidate-1",
+        name: "Remote Go",
+        query: "go",
+        remote: true,
+        skills: ["Go"],
+      }),
+    });
+    const savedBody = (await saved.json()) as { id: string };
+
+    const run = await app.request(`/v1/saved-searches/${savedBody.id}/run`, {
+      method: "POST",
+    });
+    expect(run.status).toBe(200);
+    const body = (await run.json()) as { matchedCount: number; matchedJobs: { title: string }[]; savedSearch: { lastRunAt: string | null } };
+    expect(body.matchedCount).toBe(1);
+    expect(body.matchedJobs[0].title).toBe("Go Remote");
+    expect(body.savedSearch.lastRunAt).toBeTruthy();
+  });
+
+  it("returns 404 when running unknown saved search", async () => {
+    const app = createApp(new MemoryStore());
+    const run = await app.request("/v1/saved-searches/unknown/run", { method: "POST" });
+    expect(run.status).toBe(404);
+  });
+
   it("updates application status to interview from calendar webhook", async () => {
     const app = createApp(new MemoryStore());
 

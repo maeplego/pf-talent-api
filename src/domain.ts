@@ -48,6 +48,19 @@ export type CandidateProfile = {
   bio: string;
 };
 
+export type SavedSearch = {
+  id: string;
+  candidateSub: string;
+  name: string;
+  query: string;
+  employmentType?: EmploymentType;
+  remote?: boolean;
+  skills: string[];
+  salaryMin?: number;
+  salaryMax?: number;
+  lastRunAt: string | null;
+};
+
 export type BookingConfirmedEvent = {
   id: string;
   type: "calendar.booking.confirmed";

@@ -1,11 +1,12 @@
 import { ulid } from "ulidx";
-import type { Application, ApplicationStatus, BookingConfirmedEvent, CandidateProfile, Job } from "./domain.js";
+import type { Application, ApplicationStatus, BookingConfirmedEvent, CandidateProfile, Job, SavedSearch } from "./domain.js";
 import type { JobSearchParams, Store } from "./store.js";
 
 export class MemoryStore implements Store {
   private jobs = new Map<string, Job>();
   private applications = new Map<string, Application>();
   private profiles = new Map<string, CandidateProfile>();
+  private savedSearches = new Map<string, SavedSearch>();
 
   async createJob(input: Omit<Job, "id">): Promise<Job> {
     const row: Job = { id: ulid(), ...input };
@@ -50,6 +51,38 @@ export class MemoryStore implements Store {
     }
 
     return results;
+  }
+
+  async createSavedSearch(input: Omit<SavedSearch, "id" | "lastRunAt">): Promise<SavedSearch> {
+    const row: SavedSearch = {
+      id: ulid(),
+      lastRunAt: null,
+      ...input,
+    };
+    this.savedSearches.set(row.id, row);
+    return row;
+  }
+
+  async listSavedSearches(candidateSub: string): Promise<SavedSearch[]> {
+    return [...this.savedSearches.values()].filter((row) => row.candidateSub === candidateSub);
+  }
+
+  async runSavedSearch(id: string, now: string): Promise<{ savedSearch: SavedSearch; jobs: Job[] } | null> {
+    const savedSearch = this.savedSearches.get(id);
+    if (!savedSearch) {
+      return null;
+    }
+    const jobs = await this.searchJobs({
+      q: savedSearch.query || undefined,
+      employmentType: savedSearch.employmentType,
+      remote: savedSearch.remote,
+      skills: savedSearch.skills,
+      salaryMin: savedSearch.salaryMin,
+      salaryMax: savedSearch.salaryMax,
+    });
+    savedSearch.lastRunAt = now;
+    this.savedSearches.set(savedSearch.id, savedSearch);
+    return { savedSearch, jobs };
   }
 
   async createApplication(input: Omit<Application, "id" | "status">): Promise<Application> {
