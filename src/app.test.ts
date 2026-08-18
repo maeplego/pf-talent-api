@@ -106,6 +106,53 @@ describe("talent-api", () => {
     expect(res.status).toBe(404);
   });
 
+  it("filters jobs by employmentType", async () => {
+    const app = createApp(new MemoryStore());
+    await app.request("/v1/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(jobPayload({ employmentType: "full_time" })) });
+    await app.request("/v1/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(jobPayload({ title: "Contract Dev", employmentType: "contract" })) });
+    const res = await app.request("/v1/jobs?employmentType=contract");
+    const body = (await res.json()) as { title: string }[];
+    expect(body.length).toBe(1);
+    expect(body[0].title).toBe("Contract Dev");
+  });
+
+  it("filters jobs by remote", async () => {
+    const app = createApp(new MemoryStore());
+    await app.request("/v1/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(jobPayload({ remote: true })) });
+    await app.request("/v1/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(jobPayload({ title: "Office", remote: false })) });
+    const res = await app.request("/v1/jobs?remote=true");
+    const body = (await res.json()) as unknown[];
+    expect(body.length).toBe(1);
+  });
+
+  it("filters jobs by skills", async () => {
+    const app = createApp(new MemoryStore());
+    await app.request("/v1/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(jobPayload({ skills: ["Go", "PostgreSQL"] })) });
+    await app.request("/v1/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(jobPayload({ title: "Frontend", skills: ["React"] })) });
+    const res = await app.request("/v1/jobs?skills=Go");
+    const body = (await res.json()) as { title: string }[];
+    expect(body.length).toBe(1);
+    expect(body[0].title).toBe("Backend Engineer");
+  });
+
+  it("filters jobs by salary range", async () => {
+    const app = createApp(new MemoryStore());
+    await app.request("/v1/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(jobPayload({ salaryMin: 5000000, salaryMax: 8000000 })) });
+    await app.request("/v1/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(jobPayload({ title: "Junior", salaryMin: 3000000, salaryMax: 4000000 })) });
+    const res = await app.request("/v1/jobs?salaryMin=5000000");
+    const body = (await res.json()) as unknown[];
+    expect(body.length).toBe(1);
+  });
+
+  it("filters jobs by keyword q", async () => {
+    const app = createApp(new MemoryStore());
+    await app.request("/v1/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(jobPayload({ description: "We use Go and Kubernetes" })) });
+    await app.request("/v1/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(jobPayload({ title: "Designer", description: "Figma expert" })) });
+    const res = await app.request("/v1/jobs?q=kubernetes");
+    const body = (await res.json()) as unknown[];
+    expect(body.length).toBe(1);
+  });
+
   it("updates application status to interview from calendar webhook", async () => {
     const app = createApp(new MemoryStore());
 

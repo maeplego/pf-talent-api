@@ -1,6 +1,6 @@
 import { ulid } from "ulidx";
 import type { Application, ApplicationStatus, BookingConfirmedEvent, CandidateProfile, Job } from "./domain.js";
-import type { Store } from "./store.js";
+import type { JobSearchParams, Store } from "./store.js";
 
 export class MemoryStore implements Store {
   private jobs = new Map<string, Job>();
@@ -19,6 +19,37 @@ export class MemoryStore implements Store {
 
   async listJobs(): Promise<Job[]> {
     return [...this.jobs.values()];
+  }
+
+  async searchJobs(params: JobSearchParams): Promise<Job[]> {
+    let results = [...this.jobs.values()].filter((j) => j.status === "published");
+
+    if (params.q) {
+      const lower = params.q.toLowerCase();
+      results = results.filter(
+        (j) => j.title.toLowerCase().includes(lower) || j.description.toLowerCase().includes(lower),
+      );
+    }
+    if (params.employmentType) {
+      results = results.filter((j) => j.employmentType === params.employmentType);
+    }
+    if (params.remote !== undefined) {
+      results = results.filter((j) => j.remote === params.remote);
+    }
+    if (params.skills && params.skills.length > 0) {
+      const wanted = params.skills.map((s) => s.toLowerCase());
+      results = results.filter((j) =>
+        wanted.some((w) => j.skills.some((s) => s.toLowerCase() === w)),
+      );
+    }
+    if (params.salaryMin !== undefined) {
+      results = results.filter((j) => j.salaryMax !== null && j.salaryMax >= params.salaryMin!);
+    }
+    if (params.salaryMax !== undefined) {
+      results = results.filter((j) => j.salaryMin !== null && j.salaryMin <= params.salaryMax!);
+    }
+
+    return results;
   }
 
   async createApplication(input: Omit<Application, "id" | "status">): Promise<Application> {

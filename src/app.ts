@@ -71,7 +71,26 @@ export function createApp(store: Store): Hono {
   app.get("/health", (c) => c.json({ ok: true }));
 
   app.get("/v1/jobs", async (c) => {
-    const rows = await store.listJobs();
+    const q = c.req.query("q");
+    const employmentType = c.req.query("employmentType");
+    const remoteStr = c.req.query("remote");
+    const skillsStr = c.req.query("skills");
+    const salaryMinStr = c.req.query("salaryMin");
+    const salaryMaxStr = c.req.query("salaryMax");
+
+    const hasFilter = q || employmentType || remoteStr || skillsStr || salaryMinStr || salaryMaxStr;
+    if (!hasFilter) {
+      return c.json(await store.listJobs());
+    }
+
+    const rows = await store.searchJobs({
+      q: q || undefined,
+      employmentType: employmentType as any || undefined,
+      remote: remoteStr === "true" ? true : remoteStr === "false" ? false : undefined,
+      skills: skillsStr ? skillsStr.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
+      salaryMin: salaryMinStr ? Number(salaryMinStr) : undefined,
+      salaryMax: salaryMaxStr ? Number(salaryMaxStr) : undefined,
+    });
     return c.json(rows);
   });
 
