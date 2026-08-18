@@ -91,6 +91,7 @@ export function createApp(store: Store): Hono {
   const app = new Hono();
 
   app.get("/health", (c) => c.json({ ok: true }));
+  app.get("/ready", (c) => c.json({ ok: true }));
 
   app.get("/v1/jobs", async (c) => {
     const q = c.req.query("q");

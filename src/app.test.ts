@@ -44,6 +44,14 @@ describe("rankSimilarJobs", () => {
 });
 
 describe("talent-api", () => {
+  it("serves health and readiness", async () => {
+    const app = createApp(new MemoryStore());
+    const health = await app.request("/health");
+    const ready = await app.request("/ready");
+    expect(health.status).toBe(200);
+    expect(ready.status).toBe(200);
+  });
+
   it("creates job with extended fields", async () => {
     const app = createApp(new MemoryStore());
     const res = await app.request("/v1/jobs", {
