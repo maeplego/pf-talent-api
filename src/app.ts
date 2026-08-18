@@ -48,6 +48,11 @@ const savedSearchSchema = z.object({
   salaryMax: z.number().int().nonnegative().optional(),
 });
 
+const slotRangeSchema = z.object({
+  rangeStart: z.string().min(1),
+  rangeEnd: z.string().min(1),
+});
+
 const calendarLinkSchema = z.object({
   externalRef: z.string().min(1).max(128),
 });
@@ -176,6 +181,57 @@ export function createApp(store: Store): Hono {
     const text = await res.text();
     return c.body(text, res.status, {
       "Content-Type": res.headers.get("content-type") ?? "application/json",
+    });
+  });
+
+  app.get("/v1/applications/:id/interview-slots", async (c) => {
+    const parsed = slotRangeSchema.safeParse({
+      rangeStart: c.req.query("rangeStart"),
+      rangeEnd: c.req.query("rangeEnd"),
+    });
+    if (!parsed.success) {
+      return c.json({ error: { code: "invalid_request", message: parsed.error.message } }, 400);
+    }
+    const token = process.env.CALENDAR_INTERNAL_TOKEN?.trim() ?? "";
+    if (!token) {
+      return c.json({ error: { code: "unavailable", message: "calendar internal token is required" } }, 503);
+    }
+    const baseUrl = (process.env.CALENDAR_API_URL?.trim() ?? "http://localhost:8095").replace(/\/$/, "");
+    const application = await store.findApplicationById(c.req.param("id"));
+    if (!application) {
+      return c.json({ error: { code: "not_found", message: "not found" } }, 404);
+    }
+    if (application.status !== "document_passed" && application.status !== "interview") {
+      return c.json({ error: { code: "invalid_state", message: "application must be document_passed or interview" } }, 409);
+    }
+    const job = await store.findJobById(application.jobId);
+    if (!job) {
+      return c.json({ error: { code: "not_found", message: "not found" } }, 404);
+    }
+
+    const eventTypesRes = await fetch(`${baseUrl}/internal/v1/hosts/${encodeURIComponent(job.employerSub)}/event-types`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!eventTypesRes.ok) {
+      const text = await eventTypesRes.text();
+      return c.body(text, eventTypesRes.status, {
+        "Content-Type": eventTypesRes.headers.get("content-type") ?? "application/json",
+      });
+    }
+    const eventTypesBody = (await eventTypesRes.json()) as {
+      eventTypes: { id: string; slug: string; externalRef?: string }[];
+    };
+    const eventType = eventTypesBody.eventTypes.find((row) => row.externalRef === job.id);
+    if (!eventType) {
+      return c.json({ error: { code: "not_found", message: "interview event type not found" } }, 404);
+    }
+
+    const slotsRes = await fetch(
+      `${baseUrl}/public/${encodeURIComponent(eventType.slug)}/slots?rangeStart=${encodeURIComponent(parsed.data.rangeStart)}&rangeEnd=${encodeURIComponent(parsed.data.rangeEnd)}`,
+    );
+    const text = await slotsRes.text();
+    return c.body(text, slotsRes.status, {
+      "Content-Type": slotsRes.headers.get("content-type") ?? "application/json",
     });
   });
 

@@ -216,6 +216,88 @@ describe("talent-api", () => {
     expect(run.status).toBe(404);
   });
 
+  it("returns interview slots for a document-passed application via P05 APIs", async () => {
+    const app = createApp(new MemoryStore());
+    const originalToken = process.env.CALENDAR_INTERNAL_TOKEN;
+    const originalBase = process.env.CALENDAR_API_URL;
+    process.env.CALENDAR_INTERNAL_TOKEN = "test-internal-token";
+    process.env.CALENDAR_API_URL = "http://calendar-api:8095";
+
+    try {
+      const job = await app.request("/v1/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(jobPayload()),
+      });
+      const jobBody = (await job.json()) as { id: string };
+      const created = await app.request(`/v1/jobs/${jobBody.id}/applications`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidateSub: "candidate-1", resumeSnapshot: "resume" }),
+      });
+      const appBody = (await created.json()) as { id: string };
+      await app.request(`/v1/applications/${appBody.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "document_passed" }),
+      });
+
+      const fetchMock = vi.fn(async (url: string) => {
+        if (url.includes("/internal/v1/hosts/")) {
+          return new Response(
+            JSON.stringify({
+              eventTypes: [{ id: "et-1", slug: "interview-30m-demo", externalRef: jobBody.id }],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            slug: "interview-30m-demo",
+            name: "Interview 30m",
+            durationMinutes: 30,
+            hostTimeZone: "Asia/Tokyo",
+            starts: ["2026-08-19T01:00:00Z"],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const slots = await app.request(
+        `/v1/applications/${appBody.id}/interview-slots?rangeStart=${encodeURIComponent("2026-08-19T00:00:00Z")}&rangeEnd=${encodeURIComponent("2026-08-20T00:00:00Z")}`,
+      );
+      expect(slots.status).toBe(200);
+      const body = (await slots.json()) as { starts: string[] };
+      expect(body.starts).toEqual(["2026-08-19T01:00:00Z"]);
+
+      vi.unstubAllGlobals();
+    } finally {
+      process.env.CALENDAR_INTERNAL_TOKEN = originalToken;
+      process.env.CALENDAR_API_URL = originalBase;
+    }
+  });
+
+  it("rejects interview slot lookup before document_passed", async () => {
+    const app = createApp(new MemoryStore());
+    const job = await app.request("/v1/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jobPayload()),
+    });
+    const jobBody = (await job.json()) as { id: string };
+    const created = await app.request(`/v1/jobs/${jobBody.id}/applications`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidateSub: "candidate-1", resumeSnapshot: "resume" }),
+    });
+    const appBody = (await created.json()) as { id: string };
+    const slots = await app.request(
+      `/v1/applications/${appBody.id}/interview-slots?rangeStart=${encodeURIComponent("2026-08-19T00:00:00Z")}&rangeEnd=${encodeURIComponent("2026-08-20T00:00:00Z")}`,
+    );
+    expect(slots.status).toBe(409);
+  });
+
   it("updates application status to interview from calendar webhook", async () => {
     const app = createApp(new MemoryStore());
 
