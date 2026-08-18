@@ -61,6 +61,8 @@ export function createApp(store: Store): Hono {
     }
     const row = await store.createApplication({
       jobId: c.req.param("id"),
+      // P05 creates event types with `externalRef` per job. MVPでは application を jobId と同じ外部参照で紐付ける。
+      calendarExternalRef: c.req.param("id"),
       candidateSub: parsed.data.candidateSub,
       resumeSnapshot: parsed.data.resumeSnapshot,
     });

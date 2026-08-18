@@ -29,13 +29,6 @@ describe("talent-api minimal flow", () => {
     expect(created.status).toBe(201);
     const appBody = (await created.json()) as { id: string };
 
-    const linked = await app.request(`/v1/applications/${appBody.id}/calendar-link`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ externalRef: "app-ref-1" }),
-    });
-    expect(linked.status).toBe(200);
-
     const hooked = await app.request("/webhooks/calendar", {
       method: "POST",
       headers: {
@@ -49,7 +42,7 @@ describe("talent-api minimal flow", () => {
         data: {
           bookingId: "bk-1",
           eventTypeId: "et-1",
-          externalRef: "app-ref-1",
+          externalRef: jobBody.id,
           hostSub: "employer-1",
           slug: "interview-30m",
           start: "2026-08-19T01:00:00Z",
