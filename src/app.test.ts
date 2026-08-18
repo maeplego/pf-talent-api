@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
-import { canTransition } from "./domain.js";
+import { canTransition, rankSimilarJobs } from "./domain.js";
 import { MemoryStore } from "./memory.js";
 
 function jobPayload(overrides: Record<string, unknown> = {}) {
@@ -27,6 +27,19 @@ describe("canTransition", () => {
     ["rejected", "applied", false],
   ] as const)("%s → %s = %s", (from, to, expected) => {
     expect(canTransition(from, to)).toBe(expected);
+  });
+});
+
+describe("rankSimilarJobs", () => {
+  it("ranks jobs by overlapping skills", () => {
+    const target = { id: "job-1", employerSub: "e1", title: "A", status: "published", employmentType: "full_time", location: "", remote: true, salaryMin: null, salaryMax: null, skills: ["Go", "PostgreSQL"], description: "" } as const;
+    const ranked = rankSimilarJobs(target, [
+      target,
+      { ...target, id: "job-2", title: "B", skills: ["Go"] },
+      { ...target, id: "job-3", title: "C", skills: ["Go", "PostgreSQL"] },
+      { ...target, id: "job-4", title: "D", skills: ["React"] },
+    ], 5);
+    expect(ranked.map((row) => row.id)).toEqual(["job-3", "job-2"]);
   });
 });
 
@@ -296,6 +309,69 @@ describe("talent-api", () => {
       `/v1/applications/${appBody.id}/interview-slots?rangeStart=${encodeURIComponent("2026-08-19T00:00:00Z")}&rangeEnd=${encodeURIComponent("2026-08-20T00:00:00Z")}`,
     );
     expect(slots.status).toBe(409);
+  });
+
+  it("returns similar jobs from local fallback", async () => {
+    const app = createApp(new MemoryStore());
+    const base = { employmentType: "full_time", remote: true, salaryMin: null, salaryMax: null, description: "" };
+    const target = await app.request("/v1/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jobPayload({ ...base, title: "Backend", skills: ["Go", "PostgreSQL"] })),
+    });
+    const targetBody = (await target.json()) as { id: string };
+    await app.request("/v1/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jobPayload({ ...base, title: "Go Dev", skills: ["Go"] })),
+    });
+    await app.request("/v1/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jobPayload({ ...base, title: "Frontend", skills: ["React"] })),
+    });
+    const res = await app.request(`/v1/jobs/${targetBody.id}/similar?k=5`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { source: string; jobs: { title: string }[] };
+    expect(body.source).toBe("fallback");
+    expect(body.jobs.map((row) => row.title)).toEqual(["Go Dev"]);
+  });
+
+  it("uses recommend API when available", async () => {
+    const app = createApp(new MemoryStore());
+    const originalBase = process.env.RECOMMEND_API_URL;
+    process.env.RECOMMEND_API_URL = "http://recommend-api:8080";
+    try {
+      const target = await app.request("/v1/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(jobPayload({ title: "Backend", skills: ["Go"] })),
+      });
+      const targetBody = (await target.json()) as { id: string };
+      const other = await app.request("/v1/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(jobPayload({ title: "Go Dev", skills: ["Go"] })),
+      });
+      const otherBody = (await other.json()) as { id: string };
+
+      const fetchMock = vi.fn(async () =>
+        new Response(JSON.stringify({ items: [{ item_id: otherBody.id }] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      const res = await app.request(`/v1/jobs/${targetBody.id}/similar`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { source: string; jobs: { id: string }[] };
+      expect(body.source).toBe("recommend");
+      expect(body.jobs[0].id).toBe(otherBody.id);
+      vi.unstubAllGlobals();
+    } finally {
+      process.env.RECOMMEND_API_URL = originalBase;
+    }
   });
 
   it("updates application status to interview from calendar webhook", async () => {

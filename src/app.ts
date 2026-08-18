@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { canTransition, type BookingConfirmedEvent } from "./domain.js";
+import { canTransition, rankSimilarJobs, type BookingConfirmedEvent } from "./domain.js";
 import type { Store } from "./store.js";
 
 const employmentTypeEnum = z.enum(["full_time", "contract", "part_time", "internship"]);
@@ -182,6 +182,35 @@ export function createApp(store: Store): Hono {
     return c.body(text, res.status, {
       "Content-Type": res.headers.get("content-type") ?? "application/json",
     });
+  });
+
+  app.get("/v1/jobs/:id/similar", async (c) => {
+    const target = await store.findJobById(c.req.param("id"));
+    if (!target) {
+      return c.json({ error: { code: "not_found", message: "not found" } }, 404);
+    }
+    const limit = Math.max(1, Math.min(20, Number(c.req.query("k") ?? "5")));
+    const recommendBase = (process.env.RECOMMEND_API_URL?.trim() ?? "").replace(/\/$/, "");
+    if (recommendBase) {
+      try {
+        const res = await fetch(
+          `${recommendBase}/v1/similar-items?namespace=jobs&item_id=${encodeURIComponent(target.id)}&k=${limit}`,
+        );
+        if (res.ok) {
+          const body = (await res.json()) as { items?: { item_id: string }[] };
+          const ids = body.items?.map((item) => item.item_id) ?? [];
+          const allJobs = await store.listJobs();
+          const jobs = ids
+            .map((id) => allJobs.find((row) => row.id === id))
+            .filter((row): row is NonNullable<typeof row> => Boolean(row));
+          return c.json({ source: "recommend", jobs });
+        }
+      } catch {
+        // Fallback to local overlap ranking when P07 is unavailable.
+      }
+    }
+    const jobs = rankSimilarJobs(target, await store.listJobs(), limit);
+    return c.json({ source: "fallback", jobs });
   });
 
   app.get("/v1/applications/:id/interview-slots", async (c) => {
