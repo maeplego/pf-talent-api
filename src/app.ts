@@ -1,16 +1,24 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { z } from "zod";
+import { createUserAuth, type UserAuth } from "./auth.js";
 import { canTransition, rankSimilarJobs, type BookingConfirmedEvent } from "./domain.js";
 import { seedDemoJobs } from "./seed.js";
 import type { Store } from "./store.js";
 
-function devUserSub(c: Context): string {
-  return c.req.header("X-Dev-User-Sub")?.trim() ?? "";
+const defaultAuth = createUserAuth({
+  devAuth: true,
+  oidcIssuer: "",
+  oidcInternalBase: "",
+  oidcAudience: "",
+});
+
+async function resolveDevUserSub(c: Context, userAuth: UserAuth): Promise<string> {
+  return (await userAuth.resolveSub(c.req.raw.headers)) ?? "";
 }
 
-function forbidIfMismatch(c: Context, expected: string) {
-  const sub = devUserSub(c);
+async function forbidIfMismatch(c: Context, userAuth: UserAuth, expected: string) {
+  const sub = await resolveDevUserSub(c, userAuth);
   if (!sub || sub !== expected) {
     return c.json({ error: { code: "forbidden", message: "forbidden" } }, 403);
   }
@@ -101,7 +109,7 @@ const weekdayRules = [1, 2, 3, 4, 5].map((dayOfWeek) => ({
   endLocal: "12:00",
 }));
 
-export function createApp(store: Store): Hono {
+export function createApp(store: Store, userAuth: UserAuth = defaultAuth): Hono {
   const app = new Hono();
 
   app.get("/health", (c) => c.json({ ok: true }));
@@ -168,7 +176,7 @@ export function createApp(store: Store): Hono {
   });
 
   app.get("/v1/candidates/:sub/applications", async (c) => {
-    const denied = forbidIfMismatch(c, c.req.param("sub"));
+    const denied = await forbidIfMismatch(c, userAuth, c.req.param("sub"));
     if (denied) {
       return denied;
     }
@@ -176,7 +184,7 @@ export function createApp(store: Store): Hono {
   });
 
   app.get("/v1/employers/:sub/jobs", async (c) => {
-    const denied = forbidIfMismatch(c, c.req.param("sub"));
+    const denied = await forbidIfMismatch(c, userAuth, c.req.param("sub"));
     if (denied) {
       return denied;
     }
@@ -299,7 +307,7 @@ export function createApp(store: Store): Hono {
     if (!job) {
       return c.json({ error: { code: "not_found", message: "not found" } }, 404);
     }
-    const denied = forbidIfMismatch(c, job.employerSub);
+    const denied = await forbidIfMismatch(c, userAuth, job.employerSub);
     if (denied) {
       return denied;
     }

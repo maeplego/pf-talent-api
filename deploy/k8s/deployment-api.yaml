@@ -24,6 +24,12 @@ spec:
               value: "8090"
             - name: TALENT_DEV_AUTH
               value: "true"
+            - name: OIDC_ISSUER
+              value: http://idp.localhost
+            - name: OIDC_INTERNAL_BASE
+              value: http://idp.p01.svc.cluster.local:8080
+            - name: OIDC_AUDIENCE
+              value: pf-talent-web
             - name: TALENT_DATABASE_URL
               valueFrom:
                 secretKeyRef:

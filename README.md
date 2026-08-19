@@ -29,6 +29,8 @@ docker compose up -d --build
 
 連携 overlay C では platform Postgres の DB 名 `talent`（`ensure-platform-databases.ps1` / `init-databases.sql`）。接続文字列は `p10-secrets` の `TALENT_DATABASE_URL`。
 
+overlay の web は OIDC 必須。API は `TALENT_DEV_AUTH=true` のまま `X-Dev-User-Sub` を受け付け、Bearer も検証する（cluster-smoke 用）。
+
 ## テスト
 
 ```powershell
