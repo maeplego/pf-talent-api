@@ -1,17 +1,8 @@
-# P10 Kubernetes manifests
+# Kubernetes マニフェスト（P10 API）
 
-talent-api の Deployment / Service。web は兄弟 `pf-talent-web/deploy/k8s/`。
+求人 API です。画面は `pf-talent-web/deploy/k8s/` です。このフォルダだけを apply しないでください。起動は [pf-cloud-k8s](https://github.com/maeplego/pf-cloud-k8s) の scheduling-talent overlay からです。
 
-Ingress（`pf-cloud-k8s`）:
-
-- `talent.localhost` → web
+- `talent.localhost` → Web
 - `talent-api.localhost` → API
 
-calendar との内部 API / webhook 経路は overlay で cluster 内 DNS を使う。API は platform Postgres の `talent` DB（`TALENT_DATABASE_URL` は overlay の `p10-secrets`）。
-
-```powershell
-cd ..\..\pf-cloud-k8s
-.\scripts\cluster-smoke-c-scheduling-talent.ps1
-```
-
-Compose 単体デモは従来どおり `deploy/compose.yaml`。
+Postgres は platform の DB 名 `talent` です。カレンダーとの内部通信はクラスタ内 DNS です。単体デモは `deploy/compose.yaml` です。
