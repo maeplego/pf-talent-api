@@ -37,6 +37,8 @@ spec:
                   key: TALENT_DATABASE_URL
             - name: CALENDAR_API_URL
               value: http://api.p05.svc.cluster.local:8095
+            - name: RECOMMEND_API_URL
+              value: http://api.p07.svc.cluster.local:8098
             - name: CALENDAR_INTERNAL_TOKEN
               valueFrom:
                 secretKeyRef:

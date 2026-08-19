@@ -70,12 +70,20 @@ export type Report = {
   createdAt: string;
 };
 
+export function skillOverlapCount(target: Job, other: Job): number {
+  return other.skills.filter((skill) => target.skills.some((s) => s.toLowerCase() === skill.toLowerCase())).length;
+}
+
+export function skillOverlapTotal(target: Job, jobs: Job[]): number {
+  return jobs.reduce((sum, row) => sum + skillOverlapCount(target, row), 0);
+}
+
 export function rankSimilarJobs(target: Job, candidates: Job[], limit: number): Job[] {
   return candidates
     .filter((row) => row.id !== target.id && row.status === "published")
     .map((row) => ({
       row,
-      score: row.skills.filter((skill) => target.skills.some((s) => s.toLowerCase() === skill.toLowerCase())).length,
+      score: skillOverlapCount(target, row),
     }))
     .filter((row) => row.score > 0)
     .sort((a, b) => b.score - a.score || a.row.title.localeCompare(b.row.title))

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { z } from "zod";
 import { createUserAuth, type UserAuth } from "./auth.js";
-import { canTransition, rankSimilarJobs, type BookingConfirmedEvent } from "./domain.js";
+import { canTransition, rankSimilarJobs, skillOverlapTotal, type BookingConfirmedEvent } from "./domain.js";
 import { seedDemoJobs } from "./seed.js";
 import type { Store } from "./store.js";
 
@@ -289,10 +289,14 @@ export function createApp(store: Store, userAuth: UserAuth = defaultAuth): Hono 
           const body = (await res.json()) as { items?: { item_id: string }[] };
           const ids = body.items?.map((item) => item.item_id) ?? [];
           const allJobs = await store.listJobs();
-          const jobs = ids
+          const mapped = ids
             .map((id) => allJobs.find((row) => row.id === id))
             .filter((row): row is NonNullable<typeof row> => Boolean(row));
-          return c.json({ source: "recommend", jobs });
+          const fallbackJobs = rankSimilarJobs(target, allJobs, limit);
+          // Do not force a CF slot that is strictly worse than skill overlap.
+          if (mapped.length > 0 && skillOverlapTotal(target, mapped) >= skillOverlapTotal(target, fallbackJobs)) {
+            return c.json({ source: "recommend", jobs: mapped.slice(0, limit) });
+          }
         }
       } catch {
         // Fallback to local overlap ranking when P07 is unavailable.
