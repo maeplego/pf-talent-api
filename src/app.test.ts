@@ -542,5 +542,107 @@ describe("talent-api", () => {
       process.env.CALENDAR_API_URL = originalBase;
     }
   });
+
+  it("returns a published job by id", async () => {
+    const app = createApp(new MemoryStore());
+    const created = await app.request("/v1/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jobPayload()),
+    });
+    const job = (await created.json()) as { id: string; title: string };
+    const res = await app.request(`/v1/jobs/${job.id}`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { id: string; title: string };
+    expect(body.id).toBe(job.id);
+    expect(body.title).toBe("Backend Engineer");
+  });
+
+  it("returns 404 for unknown job id", async () => {
+    const app = createApp(new MemoryStore());
+    const res = await app.request("/v1/jobs/missing-id");
+    expect(res.status).toBe(404);
+  });
+
+  it("lists employer jobs for the matching header", async () => {
+    const app = createApp(new MemoryStore());
+    await app.request("/v1/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jobPayload({ title: "Mine", status: "draft" })),
+    });
+    await app.request("/v1/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jobPayload({ employerSub: "employer-2", title: "Other" })),
+    });
+    const res = await app.request("/v1/employers/employer-1/jobs", {
+      headers: { "X-Dev-User-Sub": "employer-1" },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { title: string }[];
+    expect(body.map((row) => row.title)).toEqual(["Mine"]);
+  });
+
+  it("forbids another employer from listing job applications", async () => {
+    const app = createApp(new MemoryStore());
+    const job = await app.request("/v1/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jobPayload()),
+    });
+    const jobBody = (await job.json()) as { id: string };
+    await app.request(`/v1/jobs/${jobBody.id}/applications`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidateSub: "candidate-1", resumeSnapshot: "resume" }),
+    });
+    const denied = await app.request(`/v1/jobs/${jobBody.id}/applications`, {
+      headers: { "X-Dev-User-Sub": "employer-2" },
+    });
+    expect(denied.status).toBe(403);
+    const allowed = await app.request(`/v1/jobs/${jobBody.id}/applications`, {
+      headers: { "X-Dev-User-Sub": "employer-1" },
+    });
+    expect(allowed.status).toBe(200);
+    const body = (await allowed.json()) as { candidateSub: string }[];
+    expect(body).toHaveLength(1);
+    expect(body[0].candidateSub).toBe("candidate-1");
+  });
+
+  it("forbids another candidate from listing applications", async () => {
+    const app = createApp(new MemoryStore());
+    const job = await app.request("/v1/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jobPayload()),
+    });
+    const jobBody = (await job.json()) as { id: string };
+    await app.request(`/v1/jobs/${jobBody.id}/applications`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidateSub: "candidate-1", resumeSnapshot: "resume" }),
+    });
+    const denied = await app.request("/v1/candidates/candidate-1/applications", {
+      headers: { "X-Dev-User-Sub": "candidate-2" },
+    });
+    expect(denied.status).toBe(403);
+    const allowed = await app.request("/v1/candidates/candidate-1/applications", {
+      headers: { "X-Dev-User-Sub": "candidate-1" },
+    });
+    expect(allowed.status).toBe(200);
+    const body = (await allowed.json()) as { candidateSub: string }[];
+    expect(body).toHaveLength(1);
+  });
+
+  it("seeds fictional demo jobs", async () => {
+    const app = createApp(new MemoryStore());
+    const res = await app.request("/v1/dev/seed", { method: "POST" });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { count: number; jobs: { title: string }[] };
+    expect(body.count).toBeGreaterThanOrEqual(8);
+    expect(body.count).toBeLessThanOrEqual(12);
+    expect(body.jobs.some((row) => /Google|Amazon|Microsoft|Apple|Meta/i.test(row.title))).toBe(false);
+  });
 });
 

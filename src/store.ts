@@ -14,7 +14,10 @@ export type Store = {
   createApplication(input: Omit<Application, "id" | "status">): Promise<Application>;
   findJobById(id: string): Promise<Job | null>;
   listJobs(): Promise<Job[]>;
+  listJobsByEmployer(employerSub: string): Promise<Job[]>;
   searchJobs(params: JobSearchParams): Promise<Job[]>;
+  listApplicationsByJob(jobId: string): Promise<Application[]>;
+  listApplicationsByCandidate(candidateSub: string): Promise<Application[]>;
   createSavedSearch(input: Omit<SavedSearch, "id" | "lastRunAt">): Promise<SavedSearch>;
   listSavedSearches(candidateSub: string): Promise<SavedSearch[]>;
   runSavedSearch(id: string, now: string): Promise<{ savedSearch: SavedSearch; jobs: Job[] } | null>;

@@ -28,10 +28,16 @@ docker compose up -d --build
 npm test
 ```
 
+起動時に架空求人 10 件をシードする（実在企業名は使わない）。追加投入は `POST /v1/dev/seed`。
+
 ## 主要エンドポイント
 
+- `GET /v1/jobs` / `GET /v1/jobs/:id` / `GET /v1/jobs/facets`
+- `GET /v1/employers/:sub/jobs`（`X-Dev-User-Sub` 一致必須）
 - `POST /v1/jobs`
 - `POST /v1/jobs/:id/applications`
+- `GET /v1/jobs/:id/applications`（当該 employer のヘッダ必須、他社は 403）
+- `GET /v1/candidates/:sub/applications`（当該 candidate のヘッダ必須）
 - `PUT /v1/applications/:id/calendar-link`
 - `PATCH /v1/applications/:id/status`
 - `GET /v1/applications/:id`

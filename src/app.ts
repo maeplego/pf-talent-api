@@ -1,7 +1,21 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { z } from "zod";
 import { canTransition, rankSimilarJobs, type BookingConfirmedEvent } from "./domain.js";
+import { seedDemoJobs } from "./seed.js";
 import type { Store } from "./store.js";
+
+function devUserSub(c: Context): string {
+  return c.req.header("X-Dev-User-Sub")?.trim() ?? "";
+}
+
+function forbidIfMismatch(c: Context, expected: string) {
+  const sub = devUserSub(c);
+  if (!sub || sub !== expected) {
+    return c.json({ error: { code: "forbidden", message: "forbidden" } }, 403);
+  }
+  return null;
+}
 
 const employmentTypeEnum = z.enum(["full_time", "contract", "part_time", "internship"]);
 
@@ -103,7 +117,7 @@ export function createApp(store: Store): Hono {
 
     const hasFilter = q || employmentType || remoteStr || skillsStr || salaryMinStr || salaryMaxStr;
     if (!hasFilter) {
-      return c.json(await store.listJobs());
+      return c.json(await store.searchJobs({}));
     }
 
     const rows = await store.searchJobs({
@@ -151,6 +165,27 @@ export function createApp(store: Store): Hono {
   app.get("/v1/candidates/:sub/saved-searches", async (c) => {
     const rows = await store.listSavedSearches(c.req.param("sub"));
     return c.json(rows);
+  });
+
+  app.get("/v1/candidates/:sub/applications", async (c) => {
+    const denied = forbidIfMismatch(c, c.req.param("sub"));
+    if (denied) {
+      return denied;
+    }
+    return c.json(await store.listApplicationsByCandidate(c.req.param("sub")));
+  });
+
+  app.get("/v1/employers/:sub/jobs", async (c) => {
+    const denied = forbidIfMismatch(c, c.req.param("sub"));
+    if (denied) {
+      return denied;
+    }
+    return c.json(await store.listJobsByEmployer(c.req.param("sub")));
+  });
+
+  app.post("/v1/dev/seed", async (c) => {
+    const jobs = await seedDemoJobs(store);
+    return c.json({ count: jobs.length, jobs }, 201);
   });
 
   app.post("/v1/saved-searches/:id/run", async (c) => {
@@ -257,6 +292,26 @@ export function createApp(store: Store): Hono {
     }
     const jobs = rankSimilarJobs(target, await store.listJobs(), limit);
     return c.json({ source: "fallback", jobs });
+  });
+
+  app.get("/v1/jobs/:id/applications", async (c) => {
+    const job = await store.findJobById(c.req.param("id"));
+    if (!job) {
+      return c.json({ error: { code: "not_found", message: "not found" } }, 404);
+    }
+    const denied = forbidIfMismatch(c, job.employerSub);
+    if (denied) {
+      return denied;
+    }
+    return c.json(await store.listApplicationsByJob(job.id));
+  });
+
+  app.get("/v1/jobs/:id", async (c) => {
+    const row = await store.findJobById(c.req.param("id"));
+    if (!row) {
+      return c.json({ error: { code: "not_found", message: "not found" } }, 404);
+    }
+    return c.json(row);
   });
 
   app.get("/v1/applications/:id/interview-slots", async (c) => {

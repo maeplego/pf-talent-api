@@ -23,6 +23,10 @@ export class MemoryStore implements Store {
     return [...this.jobs.values()];
   }
 
+  async listJobsByEmployer(employerSub: string): Promise<Job[]> {
+    return [...this.jobs.values()].filter((row) => row.employerSub === employerSub);
+  }
+
   async searchJobs(params: JobSearchParams): Promise<Job[]> {
     let results = [...this.jobs.values()].filter((j) => j.status === "published");
 
@@ -99,6 +103,14 @@ export class MemoryStore implements Store {
 
   async listReports(): Promise<Report[]> {
     return [...this.reports.values()];
+  }
+
+  async listApplicationsByJob(jobId: string): Promise<Application[]> {
+    return [...this.applications.values()].filter((row) => row.jobId === jobId);
+  }
+
+  async listApplicationsByCandidate(candidateSub: string): Promise<Application[]> {
+    return [...this.applications.values()].filter((row) => row.candidateSub === candidateSub);
   }
 
   async createApplication(input: Omit<Application, "id" | "status">): Promise<Application> {
