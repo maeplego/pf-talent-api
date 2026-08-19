@@ -7,7 +7,7 @@ Ingress（`pf-cloud-k8s`）:
 - `talent.localhost` → web
 - `talent-api.localhost` → API
 
-calendar との内部 API / webhook 経路は overlay で cluster 内 DNS を使う。
+calendar との内部 API / webhook 経路は overlay で cluster 内 DNS を使う。API は platform Postgres の `talent` DB（`TALENT_DATABASE_URL` は overlay の `p10-secrets`）。
 
 ```powershell
 cd ..\..\pf-cloud-k8s

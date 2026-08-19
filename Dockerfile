@@ -2,6 +2,7 @@ FROM node:22-alpine
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
+COPY schema.sql schema.sql
 COPY src src
 COPY tsconfig.json tsconfig.json
 ENV NODE_ENV=production

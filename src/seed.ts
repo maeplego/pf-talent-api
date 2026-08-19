@@ -132,3 +132,11 @@ export async function seedDemoJobs(store: Store): Promise<Job[]> {
   }
   return created;
 }
+
+export async function seedIfEmpty(store: Store): Promise<Job[]> {
+  const existing = await store.listJobs();
+  if (existing.length > 0) {
+    return existing;
+  }
+  return seedDemoJobs(store);
+}

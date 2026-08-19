@@ -22,6 +22,13 @@ spec:
           env:
             - name: TALENT_HTTP_PORT
               value: "8090"
+            - name: TALENT_DEV_AUTH
+              value: "true"
+            - name: TALENT_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: p10-secrets
+                  key: TALENT_DATABASE_URL
             - name: CALENDAR_API_URL
               value: http://api.p05.svc.cluster.local:8095
             - name: CALENDAR_INTERNAL_TOKEN

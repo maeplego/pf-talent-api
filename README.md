@@ -3,6 +3,8 @@
 P10 talent-platform API（学習用）です。  
 求人・応募の最小フローと、P05 `calendar.booking.confirmed` webhook 受信で応募ステータスを `interview` に進める結合点を実装しています。
 
+永続化は Compose / overlay では Postgres。単体テストは `MemoryStore`。
+
 ## 起動
 
 ```powershell
@@ -11,6 +13,8 @@ npm run start
 ```
 
 - `http://localhost:8090/health`
+
+`TALENT_DATABASE_URL` が空ならメモリ（再起動で消える）。Compose では専用 Postgres を使う。
 
 ## 起動（Compose）
 
@@ -21,6 +25,9 @@ docker compose up -d --build
 ```
 
 - `http://localhost:8090/health`
+- 製品専用 Postgres はホスト `localhost:5436`（DB/user `talent`）
+
+連携 overlay C では platform Postgres の DB 名 `talent`（`ensure-platform-databases.ps1` / `init-databases.sql`）。接続文字列は `p10-secrets` の `TALENT_DATABASE_URL`。
 
 ## テスト
 
@@ -28,7 +35,9 @@ docker compose up -d --build
 npm test
 ```
 
-起動時に架空求人 10 件をシードする（実在企業名は使わない）。追加投入は `POST /v1/dev/seed`。
+Postgres 結合は `TALENT_DATABASE_URL` が届くときだけ走る。
+
+起動時、空のストアなら架空求人 10 件をシードする（実在企業名は使わない）。追加投入は `POST /v1/dev/seed`。
 
 ## 主要エンドポイント
 

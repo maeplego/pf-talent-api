@@ -1,13 +1,35 @@
 services:
+  talent-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: talent
+      POSTGRES_PASSWORD: talent
+      POSTGRES_DB: talent
+    ports:
+      - "5436:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U talent -d talent"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - talent-pg:/var/lib/postgresql/data
+
   talent-api:
     build:
       context: ..
       dockerfile: Dockerfile
     environment:
       TALENT_HTTP_PORT: "8090"
-      # P05 internal API（イベントタイプ自動プロビジョン）に使う
+      TALENT_DATABASE_URL: ${TALENT_DATABASE_URL:-postgres://talent:talent@talent-db:5432/talent}
+      TALENT_DEV_AUTH: ${TALENT_DEV_AUTH:-true}
       CALENDAR_INTERNAL_TOKEN: ${CALENDAR_INTERNAL_TOKEN:-}
       CALENDAR_API_URL: ${CALENDAR_API_URL:-http://localhost:8095}
     ports:
       - "8090:8090"
+    depends_on:
+      talent-db:
+        condition: service_healthy
 
+volumes:
+  talent-pg:
