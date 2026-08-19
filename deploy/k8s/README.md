@@ -1,10 +1,17 @@
 # P10 Kubernetes manifests
 
-talent-api ‚Ì Deployment / ServiceBcalendar ‚Æ‚Ì“à•” API / webhook Œo˜H‚Í overlay ‚Å cluster “à DNS ‚ğg‚¤B
+talent-api ã® Deployment / Serviceã€‚web ã¯å…„å¼Ÿ `pf-talent-web/deploy/k8s/`ã€‚
+
+Ingressï¼ˆ`pf-cloud-k8s`ï¼‰:
+
+- `talent.localhost` â†’ web
+- `talent-api.localhost` â†’ API
+
+calendar ã¨ã®å†…éƒ¨ API / webhook çµŒè·¯ã¯ overlay ã§ cluster å†… DNS ã‚’ä½¿ã†ã€‚
 
 ```powershell
 cd ..\..\pf-cloud-k8s
-# Œã‘±‚Å’Ç‰Á‚·‚é scheduling-talent overlay ‚©‚ç‹N“®
+.\scripts\cluster-smoke-c-scheduling-talent.ps1
 ```
 
-Compose ’P‘Ìƒfƒ‚‚Í]—ˆ‚Ç‚¨‚è `deploy/compose.yaml`B
+Compose å˜ä½“ãƒ‡ãƒ¢ã¯å¾“æ¥ã©ãŠã‚Š `deploy/compose.yaml`ã€‚
