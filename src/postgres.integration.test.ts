@@ -42,6 +42,37 @@ describe.skipIf(!integrationEnabled)("PostgresStore", () => {
     const searched = await store.searchJobs({ q: "postgres engineer", skills: ["go"] });
     expect(searched.some((row) => row.id === job.id)).toBe(true);
 
+    const japanese = await store.createJob({
+      employerSub: `employer-${suffix}`,
+      title: `バックエンドエンジニア募集 ${suffix}`,
+      status: "published",
+      employmentType: "full_time",
+      location: "Tokyo",
+      remote: true,
+      salaryMin: 5000000,
+      salaryMax: 8000000,
+      skills: ["Go"],
+      description: "日本語の部分一致用の架空求人。",
+    });
+    const miss = await store.createJob({
+      employerSub: `employer-${suffix}`,
+      title: `デザイナー募集 ${suffix}`,
+      status: "published",
+      employmentType: "full_time",
+      location: "Osaka",
+      remote: false,
+      salaryMin: 4000000,
+      salaryMax: 6000000,
+      skills: ["Figma"],
+      description: "UI only.",
+    });
+    const partialJa = await store.searchJobs({ q: "エンジ" });
+    expect(partialJa.some((row) => row.id === japanese.id)).toBe(true);
+    expect(partialJa.some((row) => row.id === miss.id)).toBe(false);
+
+    const ranked = await store.searchJobs({ q: job.title });
+    expect(ranked[0]?.id).toBe(job.id);
+
     const application = await store.createApplication({
       jobId: job.id,
       candidateSub: `candidate-${suffix}`,

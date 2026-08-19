@@ -128,6 +128,11 @@ function mapSavedSearch(row: SavedSearchRow): SavedSearch {
   };
 }
 
+/** LIKE wildcards in user q must not become patterns. Escape char is '!'. */
+function likeContains(q: string): string {
+  return `%${q.replace(/[!%_]/g, "!$&")}%`;
+}
+
 function mapReport(row: ReportRow): Report {
   return {
     id: row.id,
@@ -202,10 +207,22 @@ export class PostgresStore implements Store {
   }
 
   async searchJobs(params: JobSearchParams): Promise<Job[]> {
+    const q = params.q?.trim() || null;
     const found = await this.pool.query<JobRow>(
-      `SELECT * FROM jobs
+      `SELECT *
+       FROM jobs
        WHERE status = 'published'
-         AND ($1::text IS NULL OR lower(title) LIKE '%' || lower($1) || '%' OR lower(description) LIKE '%' || lower($1) || '%')
+         AND (
+           $1::text IS NULL
+           OR search_tsv @@ plainto_tsquery('simple', $1)
+           OR title ILIKE $7 ESCAPE '!'
+           OR description ILIKE $7 ESCAPE '!'
+           OR location ILIKE $7 ESCAPE '!'
+           OR array_to_string(skills, ' ') ILIKE $7 ESCAPE '!'
+           OR similarity(title, $1) >= 0.3
+           OR word_similarity($1, title) >= 0.4
+           OR word_similarity($1, description) >= 0.4
+         )
          AND ($2::text IS NULL OR employment_type = $2)
          AND ($3::boolean IS NULL OR remote = $3)
          AND (
@@ -217,14 +234,21 @@ export class PostgresStore implements Store {
          )
          AND ($5::int IS NULL OR (salary_max IS NOT NULL AND salary_max >= $5))
          AND ($6::int IS NULL OR (salary_min IS NOT NULL AND salary_min <= $6))
-       ORDER BY created_at`,
+       ORDER BY
+         CASE
+           WHEN $1::text IS NULL THEN 0
+           ELSE ts_rank_cd(search_tsv, plainto_tsquery('simple', $1))
+             + greatest(similarity(title, $1), word_similarity($1, title))
+         END DESC,
+         created_at`,
       [
-        params.q ?? null,
+        q,
         params.employmentType ?? null,
         params.remote ?? null,
         params.skills && params.skills.length > 0 ? params.skills : null,
         params.salaryMin ?? null,
         params.salaryMax ?? null,
+        q ? likeContains(q) : null,
       ],
     );
     return found.rows.map(mapJob);

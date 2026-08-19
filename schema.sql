@@ -1,4 +1,21 @@
 -- Local / overlay demo schema. ULID ids, timestamptz clocks.
+-- Search: tsvector (simple, no English stemming) + pg_trgm for Japanese/partial.
+-- OpenSearch is not in this slice.
+
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- to_tsvector(regconfig, text) is STABLE; generated columns need IMMUTABLE.
+CREATE OR REPLACE FUNCTION jobs_search_tsv(title text, description text, location text, skills text[])
+RETURNS tsvector
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS $$
+  SELECT setweight(to_tsvector('simple'::regconfig, coalesce(title, '')), 'A')
+      || setweight(to_tsvector('simple'::regconfig, coalesce(description, '')), 'B')
+      || setweight(to_tsvector('simple'::regconfig, coalesce(location, '')), 'C')
+      || setweight(to_tsvector('simple'::regconfig, coalesce(array_to_string(skills, ' '), '')), 'B');
+$$;
 
 CREATE TABLE IF NOT EXISTS jobs (
   id TEXT PRIMARY KEY,
@@ -12,9 +29,20 @@ CREATE TABLE IF NOT EXISTS jobs (
   salary_max INTEGER,
   skills TEXT[] NOT NULL DEFAULT '{}',
   description TEXT NOT NULL DEFAULT '',
+  search_tsv tsvector GENERATED ALWAYS AS (
+    jobs_search_tsv(title, description, location, skills)
+  ) STORED,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS search_tsv tsvector
+  GENERATED ALWAYS AS (jobs_search_tsv(title, description, location, skills)) STORED;
+
+CREATE INDEX IF NOT EXISTS jobs_search_tsv_gin ON jobs USING GIN (search_tsv);
+CREATE INDEX IF NOT EXISTS jobs_title_trgm_gin ON jobs USING GIN (title gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS jobs_description_trgm_gin ON jobs USING GIN (description gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS jobs_location_trgm_gin ON jobs USING GIN (location gin_trgm_ops);
 
 CREATE TABLE IF NOT EXISTS applications (
   id TEXT PRIMARY KEY,

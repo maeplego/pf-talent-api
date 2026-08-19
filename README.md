@@ -5,6 +5,8 @@ P10 talent-platform API（学習用）です。
 
 永続化は Compose / overlay では Postgres。単体テストは `MemoryStore`。
 
+求人検索は OpenSearch ではなく Postgres の `tsvector` + `pg_trgm`（メモリ時は部分一致）。類似求人は P07、失敗時は skills overlap。
+
 ## 起動
 
 ```powershell

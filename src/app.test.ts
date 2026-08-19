@@ -174,6 +174,23 @@ describe("talent-api", () => {
     expect(body.length).toBe(1);
   });
 
+  it("filters jobs by Japanese substring q", async () => {
+    const app = createApp(new MemoryStore());
+    await app.request("/v1/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jobPayload({ title: "バックエンドエンジニア募集", description: "架空求人" })),
+    });
+    await app.request("/v1/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jobPayload({ title: "デザイナー募集", description: "Figma" })),
+    });
+    const res = await app.request(`/v1/jobs?q=${encodeURIComponent("エンジ")}`);
+    const body = (await res.json()) as { title: string }[];
+    expect(body.map((row) => row.title)).toEqual(["バックエンドエンジニア募集"]);
+  });
+
   it("creates and lists saved searches", async () => {
     const app = createApp(new MemoryStore());
     const created = await app.request("/v1/saved-searches", {

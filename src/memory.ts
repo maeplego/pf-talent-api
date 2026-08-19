@@ -33,7 +33,11 @@ export class MemoryStore implements Store {
     if (params.q) {
       const lower = params.q.toLowerCase();
       results = results.filter(
-        (j) => j.title.toLowerCase().includes(lower) || j.description.toLowerCase().includes(lower),
+        (j) =>
+          j.title.toLowerCase().includes(lower) ||
+          j.description.toLowerCase().includes(lower) ||
+          j.location.toLowerCase().includes(lower) ||
+          j.skills.some((s) => s.toLowerCase().includes(lower)),
       );
     }
     if (params.employmentType) {
