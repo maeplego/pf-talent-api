@@ -3,6 +3,7 @@ import type { Context } from "hono";
 import { z } from "zod";
 import { createUserAuth, type UserAuth } from "./auth.js";
 import { canTransition, rankSimilarJobs, skillOverlapTotal, type BookingConfirmedEvent } from "./domain.js";
+import { postRecommendEvent } from "./recommend-events.js";
 import { seedDemoJobs } from "./seed.js";
 import type { Store } from "./store.js";
 
@@ -108,6 +109,10 @@ const weekdayRules = [1, 2, 3, 4, 5].map((dayOfWeek) => ({
   startLocal: "09:00",
   endLocal: "12:00",
 }));
+
+function recommendApiURL(): string {
+  return (process.env.RECOMMEND_API_URL?.trim() ?? "").replace(/\/$/, "");
+}
 
 export function createApp(store: Store, userAuth: UserAuth = defaultAuth): Hono {
   const app = new Hono();
@@ -323,6 +328,11 @@ export function createApp(store: Store, userAuth: UserAuth = defaultAuth): Hono 
     if (!row) {
       return c.json({ error: { code: "not_found", message: "not found" } }, 404);
     }
+    const sub = await resolveDevUserSub(c, userAuth);
+    const rec = recommendApiURL();
+    if (rec && sub) {
+      void postRecommendEvent(rec, { namespace: "jobs", user_id: sub, item_id: row.id, type: "view" });
+    }
     return c.json(row);
   });
 
@@ -389,6 +399,15 @@ export function createApp(store: Store, userAuth: UserAuth = defaultAuth): Hono 
       candidateSub: parsed.data.candidateSub,
       resumeSnapshot: parsed.data.resumeSnapshot,
     });
+    const rec = recommendApiURL();
+    if (rec) {
+      void postRecommendEvent(rec, {
+        namespace: "jobs",
+        user_id: parsed.data.candidateSub,
+        item_id: c.req.param("id"),
+        type: "apply",
+      });
+    }
     return c.json(row, 201);
   });
 
