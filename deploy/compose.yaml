@@ -25,8 +25,13 @@ services:
       TALENT_DEV_AUTH: ${TALENT_DEV_AUTH:-true}
       CALENDAR_INTERNAL_TOKEN: ${CALENDAR_INTERNAL_TOKEN:-}
       CALENDAR_API_URL: ${CALENDAR_API_URL:-http://localhost:8095}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_INTERNAL_BASE: ${OIDC_INTERNAL_BASE:-}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
     ports:
-      - "8090:8090"
+      - "8091:8090"
+    extra_hosts:
+      - "localhost:host-gateway"
     depends_on:
       talent-db:
         condition: service_healthy

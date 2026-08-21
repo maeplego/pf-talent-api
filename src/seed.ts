@@ -5,6 +5,7 @@ import type { Store } from "./store.js";
 const DEMO_JOBS: Omit<Job, "id">[] = [
   {
     employerSub: "employer-1",
+    orgId: "org-demo-a",
     title: "Backend Engineer — Nimbus Forge",
     status: "published",
     employmentType: "full_time",
@@ -17,6 +18,7 @@ const DEMO_JOBS: Omit<Job, "id">[] = [
   },
   {
     employerSub: "employer-1",
+    orgId: "org-demo-a",
     title: "Frontend Engineer — Harbor Pixel",
     status: "published",
     employmentType: "full_time",
@@ -25,10 +27,11 @@ const DEMO_JOBS: Omit<Job, "id">[] = [
     salaryMin: 5000000,
     salaryMax: 8000000,
     skills: ["React", "TypeScript"],
-    description: "Harbor Pixel の候補者向け検索 UI。ファセットとフィルタを担当する。",
+    description: "Harbor Pixel の候補者検索 UI。ファセットとフィルタを担当する。",
   },
   {
     employerSub: "employer-1",
+    orgId: "org-demo-a",
     title: "Platform Engineer — Cedarline Systems",
     status: "published",
     employmentType: "full_time",
@@ -41,6 +44,7 @@ const DEMO_JOBS: Omit<Job, "id">[] = [
   },
   {
     employerSub: "employer-2",
+    orgId: "org-demo-a",
     title: "Contract SRE — Maple Stack",
     status: "published",
     employmentType: "contract",
@@ -53,6 +57,7 @@ const DEMO_JOBS: Omit<Job, "id">[] = [
   },
   {
     employerSub: "employer-2",
+    orgId: "org-demo-a",
     title: "Mobile Engineer — Blue Lantern Soft",
     status: "published",
     employmentType: "full_time",
@@ -65,6 +70,7 @@ const DEMO_JOBS: Omit<Job, "id">[] = [
   },
   {
     employerSub: "employer-2",
+    orgId: "org-demo-a",
     title: "Data Engineer — Kitefield Digital",
     status: "published",
     employmentType: "full_time",
@@ -77,6 +83,7 @@ const DEMO_JOBS: Omit<Job, "id">[] = [
   },
   {
     employerSub: "employer-2",
+    orgId: "org-demo-b",
     title: "Product Designer — Paper Crane Apps",
     status: "published",
     employmentType: "part_time",
@@ -89,6 +96,7 @@ const DEMO_JOBS: Omit<Job, "id">[] = [
   },
   {
     employerSub: "employer-3",
+    orgId: "org-demo-a",
     title: "TypeScript Intern — Quiet Harbor Tech",
     status: "published",
     employmentType: "internship",
@@ -101,6 +109,7 @@ const DEMO_JOBS: Omit<Job, "id">[] = [
   },
   {
     employerSub: "employer-3",
+    orgId: "org-demo-b",
     title: "Full-stack Engineer — Riveroak Engineering",
     status: "published",
     employmentType: "full_time",
@@ -113,6 +122,7 @@ const DEMO_JOBS: Omit<Job, "id">[] = [
   },
   {
     employerSub: "employer-3",
+    orgId: "org-demo-a",
     title: "QA Engineer — Lumen Birch",
     status: "published",
     employmentType: "contract",

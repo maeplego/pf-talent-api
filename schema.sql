@@ -20,6 +20,7 @@ $$;
 CREATE TABLE IF NOT EXISTS jobs (
   id TEXT PRIMARY KEY,
   employer_sub TEXT NOT NULL,
+  org_id TEXT NOT NULL DEFAULT 'org-demo-a',
   title TEXT NOT NULL,
   status TEXT NOT NULL,
   employment_type TEXT NOT NULL,
@@ -36,9 +37,11 @@ CREATE TABLE IF NOT EXISTS jobs (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS org_id TEXT NOT NULL DEFAULT 'org-demo-a';
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS search_tsv tsvector
   GENERATED ALWAYS AS (jobs_search_tsv(title, description, location, skills)) STORED;
 
+CREATE INDEX IF NOT EXISTS jobs_org_id_idx ON jobs (org_id);
 CREATE INDEX IF NOT EXISTS jobs_search_tsv_gin ON jobs USING GIN (search_tsv);
 CREATE INDEX IF NOT EXISTS jobs_title_trgm_gin ON jobs USING GIN (title gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS jobs_description_trgm_gin ON jobs USING GIN (description gin_trgm_ops);

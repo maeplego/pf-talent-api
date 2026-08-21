@@ -19,16 +19,20 @@ export class MemoryStore implements Store {
     return this.jobs.get(id) ?? null;
   }
 
-  async listJobs(): Promise<Job[]> {
-    return [...this.jobs.values()];
+  async listJobs(orgId?: string): Promise<Job[]> {
+    const rows = [...this.jobs.values()];
+    if (!orgId) {
+      return rows;
+    }
+    return rows.filter((row) => row.orgId === orgId);
   }
 
-  async listJobsByEmployer(employerSub: string): Promise<Job[]> {
-    return [...this.jobs.values()].filter((row) => row.employerSub === employerSub);
+  async listJobsByEmployer(employerSub: string, orgId: string): Promise<Job[]> {
+    return [...this.jobs.values()].filter((row) => row.employerSub === employerSub && row.orgId === orgId);
   }
 
   async searchJobs(params: JobSearchParams): Promise<Job[]> {
-    let results = [...this.jobs.values()].filter((j) => j.status === "published");
+    let results = [...this.jobs.values()].filter((j) => j.status === "published" && j.orgId === params.orgId);
 
     if (params.q) {
       const lower = params.q.toLowerCase();
@@ -76,12 +80,13 @@ export class MemoryStore implements Store {
     return [...this.savedSearches.values()].filter((row) => row.candidateSub === candidateSub);
   }
 
-  async runSavedSearch(id: string, now: string): Promise<{ savedSearch: SavedSearch; jobs: Job[] } | null> {
+  async runSavedSearch(id: string, now: string, orgId: string): Promise<{ savedSearch: SavedSearch; jobs: Job[] } | null> {
     const savedSearch = this.savedSearches.get(id);
     if (!savedSearch) {
       return null;
     }
     const jobs = await this.searchJobs({
+      orgId,
       q: savedSearch.query || undefined,
       employmentType: savedSearch.employmentType,
       remote: savedSearch.remote,

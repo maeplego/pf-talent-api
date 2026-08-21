@@ -3,6 +3,7 @@ export type EmploymentType = "full_time" | "contract" | "part_time" | "internshi
 export type Job = {
   id: string;
   employerSub: string;
+  orgId: string;
   title: string;
   status: "draft" | "published";
   employmentType: EmploymentType;

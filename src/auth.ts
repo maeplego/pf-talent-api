@@ -7,9 +7,18 @@ export type UserAuthConfig = {
   oidcAudience: string;
 };
 
-export type UserAuth = {
-  resolveSub(headers: Headers): Promise<string | null>;
+export type AuthUser = {
+  sub: string;
+  orgId: string;
 };
+
+export type UserAuth = {
+  resolveUser(headers: Headers): Promise<AuthUser | null>;
+  /** Job scoping. DEV_AUTH defaults to org-demo-a; OIDC requires an authenticated org_id. */
+  resolveOrgId(headers: Headers): Promise<string | null>;
+};
+
+const DEFAULT_ORG = "org-demo-a";
 
 export function createUserAuth(cfg: UserAuthConfig): UserAuth {
   const issuer = cfg.oidcIssuer.replace(/\/$/, "");
@@ -21,7 +30,7 @@ export function createUserAuth(cfg: UserAuthConfig): UserAuth {
     return new URL(`${internalBase}/jwks.json`);
   }
 
-  async function fromBearer(token: string): Promise<string | null> {
+  async function fromBearer(token: string): Promise<AuthUser | null> {
     if (!oidcOn) {
       return null;
     }
@@ -35,7 +44,11 @@ export function createUserAuth(cfg: UserAuthConfig): UserAuth {
       }
       const { payload } = await jwtVerify(token, jwks, opts);
       if (typeof payload.sub === "string" && payload.sub) {
-        return payload.sub;
+        const orgId = typeof payload.org_id === "string" ? payload.org_id.trim() : "";
+        if (!orgId) {
+          return null;
+        }
+        return { sub: payload.sub, orgId };
       }
     } catch {
       // access_token は JWT でないことがある。userinfo へ。
@@ -48,18 +61,24 @@ export function createUserAuth(cfg: UserAuthConfig): UserAuth {
       if (!res.ok) {
         return null;
       }
-      const ui = (await res.json()) as { sub?: string };
-      return ui.sub?.trim() || null;
+      const ui = (await res.json()) as { sub?: string; org_id?: string };
+      const sub = ui.sub?.trim() || "";
+      const orgId = ui.org_id?.trim() || "";
+      if (!sub || !orgId) {
+        return null;
+      }
+      return { sub, orgId };
     } catch {
       return null;
     }
   }
 
   return {
-    async resolveSub(headers): Promise<string | null> {
+    async resolveUser(headers): Promise<AuthUser | null> {
       const devSub = headers.get("X-Dev-User-Sub")?.trim();
       if (devSub && cfg.devAuth) {
-        return devSub;
+        const orgId = headers.get("X-Dev-User-Org")?.trim() || DEFAULT_ORG;
+        return { sub: devSub, orgId };
       }
       const authz = headers.get("Authorization")?.trim() ?? "";
       if (!authz.startsWith("Bearer ")) {
@@ -70,6 +89,17 @@ export function createUserAuth(cfg: UserAuthConfig): UserAuth {
         return null;
       }
       return fromBearer(token);
+    },
+
+    async resolveOrgId(headers): Promise<string | null> {
+      const user = await this.resolveUser(headers);
+      if (user) {
+        return user.orgId;
+      }
+      if (cfg.devAuth) {
+        return headers.get("X-Dev-User-Org")?.trim() || DEFAULT_ORG;
+      }
+      return null;
     },
   };
 }

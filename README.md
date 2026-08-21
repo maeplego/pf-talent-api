@@ -14,7 +14,7 @@ copy .env.example .env
 docker compose up -d --build
 ```
 
-- http://localhost:8090/health
+- http://localhost:8091/health
 - ホストの Postgres は `localhost:5436`（ユーザー / DB 名 `talent`）
 
 ホストだけで動かすときは `npm install` のあと `npm run start` です。`TALENT_DATABASE_URL` が空ならメモリ（再起動で消えます）。

@@ -15,7 +15,15 @@ const defaultAuth = createUserAuth({
 });
 
 async function resolveDevUserSub(c: Context, userAuth: UserAuth): Promise<string> {
-  return (await userAuth.resolveSub(c.req.raw.headers)) ?? "";
+  return (await userAuth.resolveUser(c.req.raw.headers))?.sub ?? "";
+}
+
+async function requireOrgId(c: Context, userAuth: UserAuth): Promise<string | Response> {
+  const orgId = await userAuth.resolveOrgId(c.req.raw.headers);
+  if (!orgId) {
+    return c.json({ error: { code: "unauthorized", message: "org_id required" } }, 401);
+  }
+  return orgId;
 }
 
 async function forbidIfMismatch(c: Context, userAuth: UserAuth, expected: string) {
@@ -121,6 +129,11 @@ export function createApp(store: Store, userAuth: UserAuth = defaultAuth): Hono 
   app.get("/ready", (c) => c.json({ ok: true }));
 
   app.get("/v1/jobs", async (c) => {
+    const orgIdOrErr = await requireOrgId(c, userAuth);
+    if (typeof orgIdOrErr !== "string") {
+      return orgIdOrErr;
+    }
+    const orgId = orgIdOrErr;
     const q = c.req.query("q");
     const employmentType = c.req.query("employmentType");
     const remoteStr = c.req.query("remote");
@@ -130,10 +143,11 @@ export function createApp(store: Store, userAuth: UserAuth = defaultAuth): Hono 
 
     const hasFilter = q || employmentType || remoteStr || skillsStr || salaryMinStr || salaryMaxStr;
     if (!hasFilter) {
-      return c.json(await store.searchJobs({}));
+      return c.json(await store.searchJobs({ orgId }));
     }
 
     const rows = await store.searchJobs({
+      orgId,
       q: q || undefined,
       employmentType: employmentType as any || undefined,
       remote: remoteStr === "true" ? true : remoteStr === "false" ? false : undefined,
@@ -145,7 +159,13 @@ export function createApp(store: Store, userAuth: UserAuth = defaultAuth): Hono 
   });
 
   app.get("/v1/jobs/facets", async (c) => {
+    const orgIdOrErr = await requireOrgId(c, userAuth);
+    if (typeof orgIdOrErr !== "string") {
+      return orgIdOrErr;
+    }
+    const orgId = orgIdOrErr;
     const rows = await store.searchJobs({
+      orgId,
       q: c.req.query("q") || undefined,
       employmentType: (c.req.query("employmentType") as any) || undefined,
       remote: c.req.query("remote") === "true" ? true : c.req.query("remote") === "false" ? false : undefined,
@@ -193,7 +213,11 @@ export function createApp(store: Store, userAuth: UserAuth = defaultAuth): Hono 
     if (denied) {
       return denied;
     }
-    return c.json(await store.listJobsByEmployer(c.req.param("sub")));
+    const orgIdOrErr = await requireOrgId(c, userAuth);
+    if (typeof orgIdOrErr !== "string") {
+      return orgIdOrErr;
+    }
+    return c.json(await store.listJobsByEmployer(c.req.param("sub"), orgIdOrErr));
   });
 
   app.post("/v1/dev/seed", async (c) => {
@@ -202,7 +226,11 @@ export function createApp(store: Store, userAuth: UserAuth = defaultAuth): Hono 
   });
 
   app.post("/v1/saved-searches/:id/run", async (c) => {
-    const result = await store.runSavedSearch(c.req.param("id"), new Date().toISOString());
+    const orgIdOrErr = await requireOrgId(c, userAuth);
+    if (typeof orgIdOrErr !== "string") {
+      return orgIdOrErr;
+    }
+    const result = await store.runSavedSearch(c.req.param("id"), new Date().toISOString(), orgIdOrErr);
     if (!result) {
       return c.json({ error: { code: "not_found", message: "not found" } }, 404);
     }
@@ -235,7 +263,11 @@ export function createApp(store: Store, userAuth: UserAuth = defaultAuth): Hono 
     if (!parsed.success) {
       return c.json({ error: { code: "invalid_request", message: parsed.error.message } }, 400);
     }
-    const row = await store.createJob(parsed.data);
+    const orgIdOrErr = await requireOrgId(c, userAuth);
+    if (typeof orgIdOrErr !== "string") {
+      return orgIdOrErr;
+    }
+    const row = await store.createJob({ ...parsed.data, orgId: orgIdOrErr });
     return c.json(row, 201);
   });
 
@@ -293,7 +325,7 @@ export function createApp(store: Store, userAuth: UserAuth = defaultAuth): Hono 
         if (res.ok) {
           const body = (await res.json()) as { items?: { item_id: string }[] };
           const ids = body.items?.map((item) => item.item_id) ?? [];
-          const allJobs = await store.listJobs();
+          const allJobs = await store.listJobs(target.orgId);
           const mapped = ids
             .map((id) => allJobs.find((row) => row.id === id))
             .filter((row): row is NonNullable<typeof row> => Boolean(row));
@@ -307,13 +339,20 @@ export function createApp(store: Store, userAuth: UserAuth = defaultAuth): Hono 
         // Fallback to local overlap ranking when P07 is unavailable.
       }
     }
-    const jobs = rankSimilarJobs(target, await store.listJobs(), limit);
+    const jobs = rankSimilarJobs(target, await store.listJobs(target.orgId), limit);
     return c.json({ source: "fallback", jobs });
   });
 
   app.get("/v1/jobs/:id/applications", async (c) => {
     const job = await store.findJobById(c.req.param("id"));
     if (!job) {
+      return c.json({ error: { code: "not_found", message: "not found" } }, 404);
+    }
+    const orgIdOrErr = await requireOrgId(c, userAuth);
+    if (typeof orgIdOrErr !== "string") {
+      return orgIdOrErr;
+    }
+    if (job.orgId !== orgIdOrErr) {
       return c.json({ error: { code: "not_found", message: "not found" } }, 404);
     }
     const denied = await forbidIfMismatch(c, userAuth, job.employerSub);
@@ -326,6 +365,13 @@ export function createApp(store: Store, userAuth: UserAuth = defaultAuth): Hono 
   app.get("/v1/jobs/:id", async (c) => {
     const row = await store.findJobById(c.req.param("id"));
     if (!row) {
+      return c.json({ error: { code: "not_found", message: "not found" } }, 404);
+    }
+    const orgIdOrErr = await requireOrgId(c, userAuth);
+    if (typeof orgIdOrErr !== "string") {
+      return orgIdOrErr;
+    }
+    if (row.orgId !== orgIdOrErr) {
       return c.json({ error: { code: "not_found", message: "not found" } }, 404);
     }
     const sub = await resolveDevUserSub(c, userAuth);

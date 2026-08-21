@@ -1,6 +1,7 @@
 import type { Application, ApplicationStatus, BookingConfirmedEvent, CandidateProfile, EmploymentType, Job, Report, SavedSearch } from "./domain.js";
 
 export type JobSearchParams = {
+  orgId: string;
   q?: string;
   employmentType?: EmploymentType;
   remote?: boolean;
@@ -13,14 +14,15 @@ export type Store = {
   createJob(input: Omit<Job, "id">): Promise<Job>;
   createApplication(input: Omit<Application, "id" | "status">): Promise<Application>;
   findJobById(id: string): Promise<Job | null>;
-  listJobs(): Promise<Job[]>;
-  listJobsByEmployer(employerSub: string): Promise<Job[]>;
+  /** When orgId is omitted, returns all orgs (seed empty-check only). */
+  listJobs(orgId?: string): Promise<Job[]>;
+  listJobsByEmployer(employerSub: string, orgId: string): Promise<Job[]>;
   searchJobs(params: JobSearchParams): Promise<Job[]>;
   listApplicationsByJob(jobId: string): Promise<Application[]>;
   listApplicationsByCandidate(candidateSub: string): Promise<Application[]>;
   createSavedSearch(input: Omit<SavedSearch, "id" | "lastRunAt">): Promise<SavedSearch>;
   listSavedSearches(candidateSub: string): Promise<SavedSearch[]>;
-  runSavedSearch(id: string, now: string): Promise<{ savedSearch: SavedSearch; jobs: Job[] } | null>;
+  runSavedSearch(id: string, now: string, orgId: string): Promise<{ savedSearch: SavedSearch; jobs: Job[] } | null>;
   createReport(input: Omit<Report, "id" | "createdAt" | "status">, now: string): Promise<Report>;
   listReports(): Promise<Report[]>;
   updateApplicationStatus(id: string, status: ApplicationStatus): Promise<Application | null>;

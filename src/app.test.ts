@@ -32,7 +32,7 @@ describe("canTransition", () => {
 
 describe("rankSimilarJobs", () => {
   it("ranks jobs by overlapping skills", () => {
-    const target = { id: "job-1", employerSub: "e1", title: "A", status: "published", employmentType: "full_time", location: "", remote: true, salaryMin: null, salaryMax: null, skills: ["Go", "PostgreSQL"], description: "" } as const;
+    const target = { id: "job-1", employerSub: "e1", orgId: "org-demo-a", title: "A", status: "published", employmentType: "full_time", location: "", remote: true, salaryMin: null, salaryMax: null, skills: ["Go", "PostgreSQL"], description: "" } as const;
     const ranked = rankSimilarJobs(target, [
       target,
       { ...target, id: "job-2", title: "B", skills: ["Go"] },
@@ -43,7 +43,7 @@ describe("rankSimilarJobs", () => {
   });
 
   it("sums skill overlap for quality gate", () => {
-    const target = { id: "job-1", employerSub: "e1", title: "A", status: "published", employmentType: "full_time", location: "", remote: true, salaryMin: null, salaryMax: null, skills: ["Go", "PostgreSQL"], description: "" } as const;
+    const target = { id: "job-1", employerSub: "e1", orgId: "org-demo-a", title: "A", status: "published", employmentType: "full_time", location: "", remote: true, salaryMin: null, salaryMax: null, skills: ["Go", "PostgreSQL"], description: "" } as const;
     const go = { ...target, id: "job-2", title: "B", skills: ["Go"] };
     const react = { ...target, id: "job-4", title: "D", skills: ["React"] };
     expect(skillOverlapTotal(target, [go])).toBe(1);
@@ -711,6 +711,24 @@ describe("talent-api", () => {
     expect(body.count).toBeGreaterThanOrEqual(8);
     expect(body.count).toBeLessThanOrEqual(12);
     expect(body.jobs.some((row) => /Google|Amazon|Microsoft|Apple|Meta/i.test(row.title))).toBe(false);
+  });
+
+  it("isolates job lists by org_id", async () => {
+    const app = createApp(new MemoryStore());
+    await app.request("/v1/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Dev-User-Org": "org-demo-a" },
+      body: JSON.stringify(jobPayload({ title: "Org A Role" })),
+    });
+    await app.request("/v1/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Dev-User-Org": "org-demo-b" },
+      body: JSON.stringify(jobPayload({ title: "Org B Role" })),
+    });
+    const a = await app.request("/v1/jobs", { headers: { "X-Dev-User-Org": "org-demo-a" } });
+    const b = await app.request("/v1/jobs", { headers: { "X-Dev-User-Org": "org-demo-b" } });
+    expect(((await a.json()) as { title: string }[]).map((row) => row.title)).toEqual(["Org A Role"]);
+    expect(((await b.json()) as { title: string }[]).map((row) => row.title)).toEqual(["Org B Role"]);
   });
 });
 

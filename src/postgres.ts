@@ -20,6 +20,7 @@ const schemaPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "..",
 type JobRow = {
   id: string;
   employer_sub: string;
+  org_id: string;
   title: string;
   status: Job["status"];
   employment_type: EmploymentType;
@@ -77,6 +78,7 @@ function mapJob(row: JobRow): Job {
   return {
     id: row.id,
     employerSub: row.employer_sub,
+    orgId: row.org_id,
     title: row.title,
     status: row.status,
     employmentType: row.employment_type,
@@ -167,13 +169,14 @@ export class PostgresStore implements Store {
     const id = ulid();
     const found = await this.pool.query<JobRow>(
       `INSERT INTO jobs (
-         id, employer_sub, title, status, employment_type, location, remote,
+         id, employer_sub, org_id, title, status, employment_type, location, remote,
          salary_min, salary_max, skills, description
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING *`,
       [
         id,
         input.employerSub,
+        input.orgId,
         input.title,
         input.status,
         input.employmentType,
@@ -193,15 +196,19 @@ export class PostgresStore implements Store {
     return found.rowCount ? mapJob(found.rows[0]) : null;
   }
 
-  async listJobs(): Promise<Job[]> {
-    const found = await this.pool.query<JobRow>("SELECT * FROM jobs ORDER BY created_at");
+  async listJobs(orgId?: string): Promise<Job[]> {
+    if (!orgId) {
+      const found = await this.pool.query<JobRow>("SELECT * FROM jobs ORDER BY created_at");
+      return found.rows.map(mapJob);
+    }
+    const found = await this.pool.query<JobRow>("SELECT * FROM jobs WHERE org_id = $1 ORDER BY created_at", [orgId]);
     return found.rows.map(mapJob);
   }
 
-  async listJobsByEmployer(employerSub: string): Promise<Job[]> {
+  async listJobsByEmployer(employerSub: string, orgId: string): Promise<Job[]> {
     const found = await this.pool.query<JobRow>(
-      "SELECT * FROM jobs WHERE employer_sub = $1 ORDER BY created_at",
-      [employerSub],
+      "SELECT * FROM jobs WHERE employer_sub = $1 AND org_id = $2 ORDER BY created_at",
+      [employerSub, orgId],
     );
     return found.rows.map(mapJob);
   }
@@ -211,7 +218,8 @@ export class PostgresStore implements Store {
     const found = await this.pool.query<JobRow>(
       `SELECT *
        FROM jobs
-       WHERE status = 'published'
+       WHERE org_id = $8
+         AND status = 'published'
          AND (
            $1::text IS NULL
            OR search_tsv @@ plainto_tsquery('simple', $1)
@@ -249,6 +257,7 @@ export class PostgresStore implements Store {
         params.salaryMin ?? null,
         params.salaryMax ?? null,
         q ? likeContains(q) : null,
+        params.orgId,
       ],
     );
     return found.rows.map(mapJob);
@@ -312,13 +321,14 @@ export class PostgresStore implements Store {
     return found.rows.map(mapSavedSearch);
   }
 
-  async runSavedSearch(id: string, now: string): Promise<{ savedSearch: SavedSearch; jobs: Job[] } | null> {
+  async runSavedSearch(id: string, now: string, orgId: string): Promise<{ savedSearch: SavedSearch; jobs: Job[] } | null> {
     const found = await this.pool.query<SavedSearchRow>("SELECT * FROM saved_searches WHERE id = $1", [id]);
     if (!found.rowCount) {
       return null;
     }
     const savedSearch = mapSavedSearch(found.rows[0]);
     const jobs = await this.searchJobs({
+      orgId,
       q: savedSearch.query || undefined,
       employmentType: savedSearch.employmentType,
       remote: savedSearch.remote,

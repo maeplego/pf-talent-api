@@ -24,6 +24,7 @@ describe.skipIf(!integrationEnabled)("PostgresStore", () => {
     const suffix = `${Date.now()}`;
     const job = await store.createJob({
       employerSub: `employer-${suffix}`,
+      orgId: "org-demo-a",
       title: `Postgres Engineer ${suffix}`,
       status: "published",
       employmentType: "full_time",
@@ -35,15 +36,17 @@ describe.skipIf(!integrationEnabled)("PostgresStore", () => {
       description: "integration",
     });
     expect(job.id).toHaveLength(26);
+    expect(job.orgId).toBe("org-demo-a");
 
     const found = await store.findJobById(job.id);
     expect(found?.title).toBe(job.title);
 
-    const searched = await store.searchJobs({ q: "postgres engineer", skills: ["go"] });
+    const searched = await store.searchJobs({ orgId: "org-demo-a", q: "postgres engineer", skills: ["go"] });
     expect(searched.some((row) => row.id === job.id)).toBe(true);
 
     const japanese = await store.createJob({
       employerSub: `employer-${suffix}`,
+      orgId: "org-demo-a",
       title: `バックエンドエンジニア募集 ${suffix}`,
       status: "published",
       employmentType: "full_time",
@@ -56,6 +59,7 @@ describe.skipIf(!integrationEnabled)("PostgresStore", () => {
     });
     const miss = await store.createJob({
       employerSub: `employer-${suffix}`,
+      orgId: "org-demo-a",
       title: `デザイナー募集 ${suffix}`,
       status: "published",
       employmentType: "full_time",
@@ -66,11 +70,11 @@ describe.skipIf(!integrationEnabled)("PostgresStore", () => {
       skills: ["Figma"],
       description: "UI only.",
     });
-    const partialJa = await store.searchJobs({ q: "エンジ" });
+    const partialJa = await store.searchJobs({ orgId: "org-demo-a", q: "エンジ" });
     expect(partialJa.some((row) => row.id === japanese.id)).toBe(true);
     expect(partialJa.some((row) => row.id === miss.id)).toBe(false);
 
-    const ranked = await store.searchJobs({ q: job.title });
+    const ranked = await store.searchJobs({ orgId: "org-demo-a", q: job.title });
     expect(ranked[0]?.id).toBe(job.id);
 
     const application = await store.createApplication({
@@ -119,7 +123,7 @@ describe.skipIf(!integrationEnabled)("PostgresStore", () => {
       query: "Postgres",
       skills: ["Go"],
     });
-    const ran = await store.runSavedSearch(saved.id, new Date().toISOString());
+    const ran = await store.runSavedSearch(saved.id, new Date().toISOString(), "org-demo-a");
     expect(ran?.savedSearch.lastRunAt).toBeTruthy();
     expect(ran?.jobs.some((row) => row.id === job.id)).toBe(true);
 
