@@ -1,4 +1,4 @@
-# pf-talent-api
+﻿# pf-talent-api
 
 学習用の求人マッチング API です。求人の作成と検索、応募、カレンダー予約確定 webhook で応募を `interview` にする、までを実装しています。**本番 ATS の置き換えではありません。**
 
@@ -38,3 +38,13 @@ Postgres 結合は接続先があるときだけ走ります。
 カレンダー連携では、イベントタイプの `externalRef` と応募の `calendarExternalRef` を同じ値にします。
 
 設計の詳細は [portfolio-plan](https://github.com/maeplego/portfolio-plan) の `portfolio-plan/talent-platform/docs/` です。
+
+## ライセンスと利用条件
+
+本リポジトリは **デモ・学習・社内評価用** です。現状品質に **保証はありません**。
+
+- 許可: クローン、ローカル実行、学習、非本番の評価
+- 別契約が必要: 本番運用、有償サービスへの組込み、再販・托管の提供
+
+詳細は [LICENSE](./LICENSE) と [licensing.md](https://github.com/maeplego/portfolio-plan/blob/master/portfolio-plan/licensing.md) を参照してください。
+
